@@ -157,7 +157,19 @@ class SubmissionController extends Controller
      */
     private function resolveTagIds(array $slugs): array
     {
-        return array_map(fn (string $slug) => Tag::firstOrCreate(['slug' => $slug])->id, $slugs);
+        if ($slugs === []) {
+            return [];
+        }
+
+        // insertOrIgnore is race-safe against the unique slug index (concurrent creators).
+        $now = now();
+        Tag::insertOrIgnore(array_map(
+            fn (string $slug) => ['slug' => $slug, 'usage_count' => 0, 'created_at' => $now, 'updated_at' => $now],
+            $slugs,
+        ));
+        $ids = Tag::whereIn('slug', $slugs)->pluck('id', 'slug');
+
+        return array_map(fn (string $slug) => (int) $ids[$slug], $slugs);
     }
 
     private function ensureFailed(Submission $submission): void

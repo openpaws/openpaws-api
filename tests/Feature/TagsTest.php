@@ -8,6 +8,7 @@ use App\Models\Submission;
 use App\Models\Tag;
 use App\Models\TagAlias;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 
 function tagged(User $owner, array $tags, array $attrs = []): Submission
@@ -180,4 +181,24 @@ it('alias on submission input resolves to the target tag', function () {
     $this->actingAs($owner, 'sanctum')->patchJson("/api/v1/submissions/{$s->public_id}", ['tags' => ['Doggo', 'canine']])
         ->assertOk()->assertJsonPath('data.tags', ['canine']);
     expect(Tag::count())->toBe(1);
+});
+
+it('tag creation survives a concurrent creator inserting the same slug', function () {
+    $owner = verified();
+    $s = Submission::factory()->for($owner)->create();
+    $raced = false;
+    DB::beforeExecuting(function (string $query) use (&$raced) {
+        if (! $raced && preg_match('/^insert (ignore )?into [`"]?tags[`"]?/i', $query)) {
+            $raced = true;
+            DB::table('tags')->insert(['slug' => 'fox', 'usage_count' => 0, 'created_at' => now(), 'updated_at' => now()]);
+        }
+    });
+
+    $this->actingAs($owner, 'sanctum')->patchJson("/api/v1/submissions/{$s->public_id}", ['tags' => ['fox', 'wolf']])
+        ->assertOk()->assertJsonPath('data.tags', ['fox', 'wolf']);
+
+    expect($raced)->toBeTrue()
+        ->and(Tag::where('slug', 'fox')->count())->toBe(1)
+        ->and(Tag::count())->toBe(2)
+        ->and(Tag::where('slug', 'fox')->value('usage_count'))->toBe(1);
 });
