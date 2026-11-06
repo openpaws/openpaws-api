@@ -3,6 +3,7 @@
 use App\Enums\Rating;
 use App\Enums\SubmissionStatus;
 use App\Enums\Visibility;
+use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Jobs\ProcessSubmission;
 use App\Models\Submission;
 use App\Models\Tag;
@@ -202,3 +203,15 @@ it('tag creation survives a concurrent creator inserting the same slug', functio
         ->and(Tag::count())->toBe(2)
         ->and(Tag::where('slug', 'fox')->value('usage_count'))->toBe(1);
 });
+
+it('tag id resolution throws instead of returning id 0 when a slug cannot be found', function () {
+    $listener = function (string $query) {
+        if (preg_match('/^select .* from [`"]?tags[`"]? where .*for update/is', $query)) {
+            DB::table('tags')->where('slug', 'ghost')->delete();
+        }
+    };
+    DB::beforeExecuting($listener);
+
+    $method = new ReflectionMethod(SubmissionController::class, 'resolveTagIds');
+    DB::transaction(fn () => $method->invoke(new SubmissionController, ['ghost']));
+})->throws(RuntimeException::class, 'ghost');

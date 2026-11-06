@@ -167,9 +167,13 @@ class SubmissionController extends Controller
             fn (string $slug) => ['slug' => $slug, 'usage_count' => 0, 'created_at' => $now, 'updated_at' => $now],
             $slugs,
         ));
-        $ids = Tag::whereIn('slug', $slugs)->pluck('id', 'slug');
+        // A locking read sees the latest committed rows, unlike the transaction's REPEATABLE READ snapshot.
+        $ids = Tag::whereIn('slug', $slugs)->lockForUpdate()->pluck('id', 'slug');
 
-        return array_map(fn (string $slug) => (int) $ids[$slug], $slugs);
+        return array_map(
+            fn (string $slug) => (int) ($ids[$slug] ?? throw new \RuntimeException("Tag [{$slug}] could not be resolved.")),
+            $slugs,
+        );
     }
 
     private function ensureFailed(Submission $submission): void
