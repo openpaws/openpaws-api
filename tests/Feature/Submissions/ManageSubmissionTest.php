@@ -5,7 +5,7 @@ use App\Models\Submission;
 use App\Models\User;
 
 it('owner can PATCH title, description, rating and visibility', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->create(['adult_confirmed_at' => now()]);
     $s = Submission::factory()->for($owner)->create();
 
     $this->actingAs($owner, 'sanctum')->patchJson("/api/v1/submissions/{$s->public_id}", [
@@ -23,7 +23,7 @@ it('owner can PATCH title, description, rating and visibility', function () {
 });
 
 it('only the owner can PATCH and DELETE', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->create(['adult_confirmed_at' => now()]);
     $visible = Submission::factory()->for($owner)->create();
     $hidden = Submission::factory()->for($owner)->create(['status' => 'processing', 'published_at' => null]);
     $adult = Submission::factory()->for($owner)->create(['rating' => Rating::Adult]);

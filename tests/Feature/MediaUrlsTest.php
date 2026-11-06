@@ -10,6 +10,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Storage\ObjectStorage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 
 /**
@@ -50,7 +51,7 @@ it('mature submission media urls are public cdn urls too', function () {
     $s = Submission::factory()->create(['rating' => Rating::Mature]);
     giveAssets($s, ['thumb_md' => []]);
 
-    $url = MediaUrls::for($s->asset(AssetRole::ThumbMd), $s);
+    $url = MediaUrls::for($s->asset(AssetRole::ThumbMd), $s, null);
     expect($url)->toBe(rtrim(config('openpaws.cdn_url'), '/').'/'.$s->asset(AssetRole::ThumbMd)->path)
         ->and($url)->toContain('/public/media/');
 });
@@ -64,8 +65,8 @@ it('adult submission media urls are temporary and expire in 600s', function () {
     expect($preview->path)->toStartWith("private/media/{$s->public_id}/");
 
     $this->actingAs($viewer, 'sanctum')->getJson("/api/v1/submissions/{$s->public_id}")->assertOk()
-        ->assertJsonPath('data.media.preview.url', 'fake://temp/'.$preview->path.'?expires='.(time() + 600));
-    expect(MediaUrls::for($preview, $s))->toBe('fake://temp/'.$preview->path.'?expires='.(time() + 600));
+        ->assertJsonPath('data.media.preview.url', 'fake://temp/'.$preview->path.'?expires='.(now()->getTimestamp() + 600));
+    expect(MediaUrls::for($preview, $s, $viewer))->toBe('fake://temp/'.$preview->path.'?expires='.(now()->getTimestamp() + 600));
 });
 
 it('audio/video expose transcode but not original', function (string $type) {
@@ -169,22 +170,113 @@ it('PATCH only queues a move when the rating crosses the adult boundary', functi
     Queue::assertPushed(MoveSubmissionMedia::class, 2);
 });
 
-it('media urls for a newly-adult item are signed even before the move job ran', function () {
+it('a newly-adult item gets no url for assets still under public/ until the move ran', function () {
     Queue::fake();
-    $this->freezeTime();
     $owner = makeAdultUser();
     $s = Submission::factory()->for($owner)->create();
-    giveAssets($s, ['thumb_sm' => []]);
+    giveAssets($s, ['thumb_sm' => [], 'preview' => []]);
     $path = $s->asset(AssetRole::ThumbSm)->path;
 
-    $this->actingAs($owner, 'sanctum')->patchJson("/api/v1/submissions/{$s->public_id}", ['rating' => 'adult'])->assertOk()
-        ->assertJsonPath('data.media.thumb_sm.url', 'fake://temp/'.$path.'?expires='.(time() + 600));
-    expect($path)->toStartWith('public/');
-    Queue::assertPushed(MoveSubmissionMedia::class);
+    $res = $this->actingAs($owner, 'sanctum')->patchJson("/api/v1/submissions/{$s->public_id}", ['rating' => 'adult'])->assertOk();
+    expect($path)->toStartWith('public/')
+        ->and($res->getContent())->toContain('"media":{}')->not->toContain($path);
+    Queue::assertPushed(MoveSubmissionMedia::class, fn ($job) => $job->queue === 'moves');
 
+    $raw = $this->getJson("/api/v1/submissions/{$s->public_id}")->assertOk()->getContent();
+    expect($raw)->toContain('"media":{}')->not->toContain('public/media/');
+    expect(MediaUrls::for($s->fresh()->asset(AssetRole::ThumbSm), $s->fresh(), $owner))->toBeNull();
+
+    // Once moved, the signed URLs appear.
+    (new MoveSubmissionMedia($s))->handle($this->storage);
     $this->getJson("/api/v1/submissions/{$s->public_id}")->assertOk()
-        ->assertJsonPath('data.media.thumb_sm.url', 'fake://temp/'.$path.'?expires='.(time() + 600));
+        ->assertJsonPath('data.media.thumb_sm.url', fn ($u) => str_starts_with($u, 'fake://temp/private/media/'));
 });
+
+it('MoveSubmissionMedia runs on the moves queue and is not limited by overlap releases', function () {
+    $job = new MoveSubmissionMedia(Submission::factory()->create());
+
+    expect($job->queue)->toBe('moves')
+        ->and($job->retryUntil()->getTimestamp())->toBeGreaterThan(now()->addHours(5)->getTimestamp())
+        ->and($job->maxExceptions)->toBe(5)
+        ->and(property_exists($job, 'tries'))->toBeFalse();
+});
+
+it('MoveSubmissionMedia failed() logs critical with the paths not yet moved', function () {
+    Log::spy();
+    $s = Submission::factory()->create();
+    giveAssets($s, ['thumb_sm' => [], 'original' => []]);
+    $paths = $s->assets()->pluck('path')->sort()->values()->all();
+    Submission::whereKey($s->id)->update(['rating' => 'adult']);
+
+    (new MoveSubmissionMedia($s))->failed(new RuntimeException('s3 down'));
+
+    Log::shouldHaveReceived('critical')->withArgs(fn ($msg, $ctx) => $ctx['submission_id'] === $s->id
+        && collect($ctx['paths_not_moved'])->sort()->values()->all() === $paths
+        && $ctx['target_prefix'] === "private/media/{$s->public_id}/");
+});
+
+it('hidden or removed submissions get no media urls, owner included', function (string $status) {
+    $owner = makeAdultUser();
+    $s = Submission::factory()->for($owner)->create(['status' => $status]);
+    giveAssets($s, ['thumb_sm' => [], 'original' => []]);
+
+    $raw = $this->actingAs($owner, 'sanctum')->getJson("/api/v1/submissions/{$s->public_id}")->assertOk()->getContent();
+    expect($raw)->toContain('"media":{}')->not->toContain('/media/');
+})->with(['hidden', 'removed']);
+
+it('adult media urls need an adult viewer, or the 18+-confirmed owner', function () {
+    $confirmedOwner = User::factory()->create(['adult_confirmed_at' => now(), 'max_rating' => 'general']);
+    $s = Submission::factory()->for($confirmedOwner)->create(['rating' => Rating::Adult]);
+    giveAssets($s, ['thumb_sm' => []]);
+    $legacyOwner = User::factory()->create(); // not confirmed (e.g. rated before R18)
+    $legacy = Submission::factory()->for($legacyOwner)->create(['rating' => Rating::Adult]);
+    giveAssets($legacy, ['thumb_sm' => []]);
+
+    $this->actingAs($confirmedOwner, 'sanctum')->getJson("/api/v1/submissions/{$s->public_id}")->assertOk()
+        ->assertJsonPath('data.media.thumb_sm.url', fn ($u) => str_starts_with($u, 'fake://temp/private/'));
+    app('auth')->forgetGuards();
+    $raw = $this->actingAs($legacyOwner, 'sanctum')->getJson("/api/v1/submissions/{$legacy->public_id}")->assertOk()->getContent();
+    expect($raw)->toContain('"media":{}');
+
+    $asset = $s->asset(AssetRole::ThumbSm);
+    expect(MediaUrls::for($asset, $s, null))->toBeNull()
+        ->and(MediaUrls::for($asset, $s, makeAdultUser('mature')))->toBeNull()
+        ->and(MediaUrls::for($asset, $s, User::factory()->create(['max_rating' => 'adult'])))->toBeNull()
+        ->and(MediaUrls::for($asset, $s, makeAdultUser('adult')))->toStartWith('fake://temp/private/');
+});
+
+it('mature or adult ratings require an 18+-confirmed uploader on create, update and retry', function (string $rating) {
+    Queue::fake();
+    $u = User::factory()->create();
+    $this->actingAs($u, 'sanctum');
+
+    $this->postJson('/api/v1/submissions', [
+        'type' => 'image', 'title' => 't', 'rating' => $rating, 'visibility' => 'public',
+        'upload_session_id' => makeUploadSession($u, 'image')->id,
+    ])->assertStatus(422)->assertJsonPath('error.code', 'validation_failed')->assertJsonStructure(['error' => ['fields' => ['rating']]]);
+
+    $s = Submission::factory()->for($u)->create();
+    $this->patchJson("/api/v1/submissions/{$s->public_id}", ['rating' => $rating])
+        ->assertStatus(422)->assertJsonPath('error.code', 'validation_failed')->assertJsonStructure(['error' => ['fields' => ['rating']]]);
+    expect($s->fresh()->rating)->toBe(Rating::General);
+
+    $failed = Submission::factory()->for($u)->create(['rating' => $rating, 'status' => 'failed', 'published_at' => null]);
+    $session = makeUploadSession($u, 'image');
+    $this->postJson("/api/v1/submissions/{$failed->public_id}/retry", ['upload_session_id' => $session->id])
+        ->assertStatus(422)->assertJsonPath('error.code', 'validation_failed')->assertJsonStructure(['error' => ['fields' => ['rating']]]);
+    Queue::assertNothingPushed();
+
+    // Once confirmed, all three work.
+    $u->forceFill(['adult_confirmed_at' => now()])->save();
+    app('auth')->forgetGuards();
+    $this->actingAs($u->fresh(), 'sanctum');
+    $this->postJson('/api/v1/submissions', [
+        'type' => 'image', 'title' => 't', 'rating' => $rating, 'visibility' => 'public',
+        'upload_session_id' => makeUploadSession($u, 'image')->id,
+    ])->assertCreated();
+    $this->patchJson("/api/v1/submissions/{$s->public_id}", ['rating' => $rating])->assertOk();
+    $this->postJson("/api/v1/submissions/{$failed->public_id}/retry", ['upload_session_id' => $session->id])->assertOk();
+})->with(['mature', 'adult']);
 
 it('MoveSubmissionMedia is idempotent and tolerates a source already moved', function () {
     $s = Submission::factory()->create();

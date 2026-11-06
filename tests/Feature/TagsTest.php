@@ -133,7 +133,7 @@ it('autocomplete returns at most 10', function () {
 });
 
 it('tag page lists only submissions listed for the viewer', function () {
-    $o = User::factory()->create();
+    $o = User::factory()->create(['adult_confirmed_at' => now()]);
     $ok = tagged($o, ['fox']);
     tagged($o, ['fox'], ['visibility' => Visibility::Unlisted]);
     tagged($o, ['fox'], ['rating' => Rating::Adult]);

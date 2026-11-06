@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\AssetRole;
+use App\Enums\SubmissionStatus;
 use App\Enums\SubmissionType;
 use App\Media\MediaUrls;
 use App\Models\MediaAsset;
@@ -61,10 +62,15 @@ class SubmissionResource extends JsonResource
 
     /**
      * Existing assets keyed by role. Audio and video never expose the raw upload (`original`);
-     * they expose `transcode`. Always a JSON object, even when empty.
+     * they expose `transcode`. Hidden or removed submissions get no URLs at all (owner included),
+     * and roles MediaUrls gives no URL for are left out. Always a JSON object, even when empty.
      */
     private function media(Request $request): object
     {
+        if (in_array($this->status, [SubmissionStatus::Hidden, SubmissionStatus::Removed], true)) {
+            return new \stdClass;
+        }
+        $viewer = $request->user('sanctum');
         $hideOriginal = in_array($this->type, [SubmissionType::Audio, SubmissionType::Video], true);
         $byRole = $this->assets->keyBy(fn (MediaAsset $a) => $a->role->value);
 
@@ -74,7 +80,10 @@ class SubmissionResource extends JsonResource
             if ($asset === null || ($role === AssetRole::Original && $hideOriginal)) {
                 continue;
             }
-            $media[$role->value] = (new MediaAssetResource($asset, MediaUrls::for($asset, $this->resource)))->resolve($request);
+            $url = MediaUrls::for($asset, $this->resource, $viewer);
+            if ($url !== null) {
+                $media[$role->value] = (new MediaAssetResource($asset, $url))->resolve($request);
+            }
         }
 
         return (object) $media;

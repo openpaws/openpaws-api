@@ -76,6 +76,16 @@ anonymous `curl` of a `public/` object is 200, of a `private/` or `staging/` obj
 of `http://127.0.0.1:9000/openpaws?list-type=2&prefix=public` 403; a presigned
 `temporaryUrl` for a `private/` object is 200.
 
+## Queue worker
+Queues in priority order: `moves` (MoveSubmissionMedia: public/ ↔ private/ after an adult
+rating change; short, and must not wait behind transcodes), then `media`, `video`, `default`.
+```bash
+php artisan queue:work --queue=moves,media,video,default
+```
+Until a pending move has run, the API returns no URL for an adult submission's assets that are
+still under `public/` (the media is briefly missing rather than leaking). If a move fails for good,
+it logs at `critical` level ("Moving submission media failed") with the paths that were not moved.
+
 ## Verify
 ```bash
 php -m | grep imagick; ffprobe -version | head -1; mariadb -e 'show databases' | grep openpaws

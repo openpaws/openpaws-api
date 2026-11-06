@@ -18,6 +18,7 @@ use App\Models\Submission;
 use App\Models\Tag;
 use App\Models\UploadSession;
 use App\Models\User;
+use App\Rules\AdultConfirmedForRating;
 use App\Storage\ObjectStorage;
 use App\Support\ViewCounter;
 use Illuminate\Http\Request;
@@ -126,6 +127,9 @@ class SubmissionController extends Controller
         $this->ensureFailed($submission);
 
         $user = $request->user();
+        if (! AdultConfirmedForRating::allows($user, $submission->rating)) {
+            throw ValidationException::withMessages(['rating' => [AdultConfirmedForRating::MESSAGE]]);
+        }
         $type = $submission->type;
         $data = $request->validate([
             'upload_session_id' => [Rule::requiredIf($type->requiresUpload()), 'nullable', 'string', 'max:64'],

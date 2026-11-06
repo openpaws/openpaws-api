@@ -6,6 +6,7 @@ use App\Enums\Rating;
 use App\Enums\SubmissionType;
 use App\Enums\Visibility;
 use App\Http\Requests\Concerns\ValidatesTags;
+use App\Rules\AdultConfirmedForRating;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -33,7 +34,7 @@ class UpdateSubmissionRequest extends FormRequest
             'body' => $isWriting
                 ? ['sometimes', 'required', 'string', 'max:500000']
                 : ['prohibited'],
-            'rating' => ['sometimes', 'required', Rule::enum(Rating::class)],
+            'rating' => ['sometimes', 'required', Rule::enum(Rating::class), new AdultConfirmedForRating($this->user())],
             'visibility' => ['sometimes', 'required', Rule::enum(Visibility::class)],
             'tags' => ['sometimes', 'array', 'max:200'],
             'tags.*' => ['string', 'max:100'],

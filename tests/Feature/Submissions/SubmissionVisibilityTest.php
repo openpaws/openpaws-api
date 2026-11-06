@@ -54,7 +54,7 @@ it('confirmed adult user with max_rating mature sees mature but 404s adult', fun
 });
 
 it('owner sees their own adult submission even with a general max rating', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->create(['adult_confirmed_at' => now()]);
     $s = Submission::factory()->for($owner)->create(['rating' => Rating::Adult]);
     $this->actingAs($owner, 'sanctum')->getJson("/api/v1/submissions/{$s->public_id}")->assertOk();
 });
@@ -78,7 +78,7 @@ it('404s for unknown ids', function () {
 });
 
 it('visibleTo and listedFor scopes apply the rating, status and visibility rules', function () {
-    $owner = User::factory()->create();
+    $owner = User::factory()->create(['adult_confirmed_at' => now()]);
     $pubGeneral = Submission::factory()->for($owner)->create();
     $pubAdult = Submission::factory()->for($owner)->create(['rating' => Rating::Adult]);
     $unlisted = Submission::factory()->for($owner)->create(['visibility' => 'unlisted']);

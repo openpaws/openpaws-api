@@ -20,7 +20,11 @@ class SubmissionFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id' => User::factory(),
+            // A mature/adult rating requires an 18+-confirmed uploader.
+            'user_id' => fn (array $a) => User::factory()->state(
+                in_array($a['rating'] instanceof Rating ? $a['rating'] : Rating::from($a['rating']), [Rating::Mature, Rating::Adult], true)
+                    ? ['adult_confirmed_at' => now()] : []
+            ),
             'type' => SubmissionType::Image,
             'title' => fake()->sentence(3),
             'description' => null,

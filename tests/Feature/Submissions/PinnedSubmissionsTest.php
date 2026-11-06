@@ -5,7 +5,7 @@ use App\Models\Submission;
 use App\Models\User;
 
 it('pinned resolves through listedFor in stored order and hides unlisted or over-rating items', function () {
-    $u = User::factory()->create(['username' => 'otter']);
+    $u = User::factory()->create(['username' => 'otter', 'adult_confirmed_at' => now()]);
     $a = Submission::factory()->for($u)->create(['title' => 'A']);
     $b = Submission::factory()->for($u)->create(['title' => 'B']);
     $unlisted = Submission::factory()->for($u)->create(['visibility' => 'unlisted']);
@@ -33,7 +33,7 @@ it('pinned resolves through listedFor in stored order and hides unlisted or over
 });
 
 it('pinned drops deleted submissions', function () {
-    $u = User::factory()->create(['username' => 'otter']);
+    $u = User::factory()->create(['username' => 'otter', 'adult_confirmed_at' => now()]);
     $a = Submission::factory()->for($u)->create();
     $this->actingAs($u, 'sanctum')->patchJson('/api/v1/me/profile', ['pinned_submission_ids' => [$a->public_id]])->assertOk();
     $a->delete();

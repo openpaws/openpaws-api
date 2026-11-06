@@ -123,6 +123,6 @@ class FakeObjectStorage implements ObjectStorage
 
     public function temporaryUrl(string $path, int $ttl): string
     {
-        return 'fake://temp/'.$path.'?expires='.(time() + $ttl);
+        return 'fake://temp/'.$path.'?expires='.(now()->getTimestamp() + $ttl);
     }
 }
