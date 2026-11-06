@@ -30,6 +30,8 @@ Route::middleware('auth:sanctum')->prefix('me')->group(function () {
     Route::patch('password', [MeController::class, 'password']);
     Route::patch('settings', [MeController::class, 'settings']);
     Route::post('adult-confirmation', [MeController::class, 'adultConfirmation']);
+    Route::put('avatar', [MeController::class, 'avatar']);
+    Route::put('banner', [MeController::class, 'banner']);
     Route::patch('profile', [ProfileController::class, 'update']);
 });
 

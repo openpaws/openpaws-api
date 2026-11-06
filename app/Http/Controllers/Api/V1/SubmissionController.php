@@ -6,7 +6,6 @@ use App\Actions\PlaceSubmission;
 use App\Enums\SubmissionStatus;
 use App\Enums\SubmissionType;
 use App\Enums\UploadKind;
-use App\Enums\UploadStatus;
 use App\Exceptions\DomainError;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSubmissionRequest;
@@ -17,11 +16,10 @@ use App\Jobs\ProcessSubmission;
 use App\Media\MediaPaths;
 use App\Models\Submission;
 use App\Models\Tag;
-use App\Models\UploadSession;
-use App\Models\User;
 use App\Rules\AdultConfirmedForRating;
 use App\Storage\ObjectStorage;
 use App\Support\ViewCounter;
+use App\Uploads\LocksUploadSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -34,6 +32,8 @@ use Illuminate\Validation\ValidationException;
  */
 class SubmissionController extends Controller
 {
+    use LocksUploadSession;
+
     public function store(StoreSubmissionRequest $request)
     {
         $user = $request->user();
@@ -207,26 +207,5 @@ class SubmissionController extends Controller
         if ($submission->status !== SubmissionStatus::Failed) {
             throw new DomainError('invalid_state', 'Only submissions whose processing failed can be retried.');
         }
-    }
-
-    /**
-     * Locks the caller's upload session row and checks it can back a new submission.
-     * Throws (rolling back the transaction) when it is missing, foreign, the wrong kind or not usable.
-     */
-    private function lockSession(User $user, string $field, string $id, UploadKind $kind): UploadSession
-    {
-        $session = UploadSession::whereKey($id)->where('user_id', $user->id)->lockForUpdate()->first();
-        if ($session === null) {
-            throw ValidationException::withMessages([$field => ['The upload was not found.']]);
-        }
-        if ($session->kind !== $kind) {
-            throw ValidationException::withMessages([$field => ["This upload must be of kind {$kind->value}."]]);
-        }
-
-        return match ($session->status) {
-            UploadStatus::Uploaded => $session,
-            UploadStatus::Pending => throw new DomainError('upload_not_complete', 'The upload has not been completed.'),
-            UploadStatus::Consumed, UploadStatus::Expired => throw new DomainError('upload_already_used', 'This upload can no longer be used.'),
-        };
     }
 }
