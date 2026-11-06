@@ -118,7 +118,9 @@ it('resets password via emailed token', function () {
     $user = User::factory()->create(['email' => 'otter@example.com', 'username' => 'otter']);
     spa()->postJson('/api/v1/auth/password/forgot', ['email' => 'otter@example.com'])->assertOk();
     spa()->postJson('/api/v1/auth/password/forgot', ['email' => 'ghost@example.com'])->assertOk();
-    Notification::assertNothingSentTo(new User);
+    // Only the registered address gets mail: exactly one notification, and it went to $user.
+    Notification::assertCount(1);
+    Notification::assertSentTimes(ResetPassword::class, 1);
     $token = null;
     Notification::assertSentTo($user, ResetPassword::class, function ($n) use (&$token, $user) {
         $token = $n->token;

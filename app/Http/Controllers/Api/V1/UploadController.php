@@ -68,9 +68,9 @@ class UploadController extends Controller
             $resource = new UploadSessionResource($session);
         } else {
             $session->save();
-            $resource = (new UploadSessionResource($session))->additional([
-                'url' => $storage->presignPut($path, $data['mime'], (int) config('openpaws.presign_ttl')),
-            ]);
+            $resource = (new UploadSessionResource($session))->withPutUrl(
+                $storage->presignPut($path, $data['mime'], (int) config('openpaws.presign_ttl')),
+            );
         }
 
         return $resource->response()->setStatusCode(201);

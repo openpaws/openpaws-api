@@ -27,7 +27,9 @@ it('creates a single-PUT session under 100 MB', function () {
     startUploadReq($this, $u)->assertCreated()
         ->assertJsonPath('data.multipart', false)
         ->assertJsonPath('data.status', 'pending')
-        ->assertJson(fn ($j) => $j->has('data.url')->has('data.expires_at')->etc());
+        ->assertJson(fn ($j) => $j->has('data.url')->has('data.expires_at')->etc())
+        ->assertJsonMissingPath('url'); // only data.url, no top-level copy
+    expect(array_keys(startUploadReq($this, $u)->json()))->toBe(['data']);
     expect(UploadSession::first()->path)->toStartWith('staging/')->toEndWith('/a_b.png');
 });
 

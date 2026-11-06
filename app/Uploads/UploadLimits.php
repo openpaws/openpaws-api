@@ -22,7 +22,8 @@ class UploadLimits
     public static function sanitiseFilename(string $name): string
     {
         $name = preg_replace('/[^A-Za-z0-9._-]/', '_', $name) ?? '';
-        $name = substr($name, 0, 100);
+        // No leading dots: `.` and `..` are dot segments that S3-compatible stores reject in keys.
+        $name = substr(ltrim($name, '.'), 0, 100);
 
         return $name === '' ? 'file' : $name;
     }

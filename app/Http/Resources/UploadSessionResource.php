@@ -10,6 +10,16 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin UploadSession */
 class UploadSessionResource extends JsonResource
 {
+    /** Presigned PUT URL for a single-PUT upload; returned as data.url only. */
+    private ?string $putUrl = null;
+
+    public function withPutUrl(string $url): static
+    {
+        $this->putUrl = $url;
+
+        return $this;
+    }
+
     public function toArray(Request $request): array
     {
         $out = [
@@ -22,8 +32,8 @@ class UploadSessionResource extends JsonResource
         if ($this->multipart) {
             $out['part_size'] = UploadLimits::partSize();
             $out['part_count'] = $this->part_count;
-        } elseif (isset($this->additional['url'])) {
-            $out['url'] = $this->additional['url'];
+        } elseif ($this->putUrl !== null) {
+            $out['url'] = $this->putUrl;
         }
 
         return $out;
