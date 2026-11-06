@@ -86,6 +86,15 @@ Until a pending move has run, the API returns no URL for an adult submission's a
 still under `public/` (the media is briefly missing rather than leaking). If a move fails for good,
 it logs at `critical` level ("Moving submission media failed") with the paths that were not moved.
 
+## Search index
+Meilisearch must be running (`MEILISEARCH_HOST`/`MEILISEARCH_KEY` in `.env`, `SCOUT_DRIVER=meilisearch`).
+After first setup (and whenever the index settings in `config/scout.php` change):
+```bash
+php artisan scout:sync-index-settings
+php artisan scout:import "App\Models\Submission"
+```
+Submissions are indexed on save (published + public only) and removed on delete or unlisting.
+
 ## Verify
 ```bash
 php -m | grep imagick; ffprobe -version | head -1; mariadb -e 'show databases' | grep openpaws

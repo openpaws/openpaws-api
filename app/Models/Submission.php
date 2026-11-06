@@ -16,11 +16,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Laravel\Scout\Searchable;
 
 class Submission extends Model
 {
     /** @use HasFactory<SubmissionFactory> */
-    use HasFactory, HasPublicId, SoftDeletes;
+    use HasFactory, HasPublicId, Searchable, SoftDeletes;
 
     protected $guarded = ['id', 'public_id', 'views_count'];
 
@@ -36,6 +37,39 @@ class Submission extends Model
             'published_at' => 'datetime',
             'views_count' => 'integer',
         ];
+    }
+
+    /** @return array<string, mixed> */
+    public function toSearchableArray(): array
+    {
+        $this->loadMissing(['tags', 'user']);
+
+        return [
+            'id' => $this->id,
+            'public_id' => $this->public_id,
+            'title' => $this->title,
+            'description' => $this->description,
+            'tags' => $this->tags->pluck('slug')->values()->all(),
+            'type' => $this->type->value,
+            'rating' => $this->rating->value,
+            'user_id' => $this->user_id,
+            'username' => $this->user?->username,
+            'published_at' => $this->published_at?->getTimestamp(),
+            'views_count' => $this->views_count,
+        ];
+    }
+
+    public function shouldBeSearchable(): bool
+    {
+        return $this->status === SubmissionStatus::Published
+            && $this->published_at !== null
+            && $this->visibility === Visibility::Public
+            && ! $this->trashed();
+    }
+
+    protected function makeAllSearchableUsing(Builder $query): Builder
+    {
+        return $query->with(['tags', 'user']);
     }
 
     public function user(): BelongsTo

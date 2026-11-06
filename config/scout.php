@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Submission;
+
 return [
 
     /*
@@ -140,6 +142,11 @@ return [
         'host' => env('MEILISEARCH_HOST', 'http://localhost:7700'),
         'key' => env('MEILISEARCH_KEY'),
         'index-settings' => [
+            Submission::class => [
+                'filterableAttributes' => ['rating', 'type', 'tags', 'user_id'],
+                'sortableAttributes' => ['published_at', 'views_count'],
+                'searchableAttributes' => ['title', 'tags', 'username', 'description'],
+            ],
             // 'users' => [
             //     'filterableAttributes' => ['id', 'name', 'email'],
             //     'embedders' => [

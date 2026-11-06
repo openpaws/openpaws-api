@@ -5,9 +5,11 @@ use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\PasswordController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
+use App\Http\Controllers\Api\V1\BrowseController;
 use App\Http\Controllers\Api\V1\FolderController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\SearchController;
 use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Http\Controllers\Api\V1\TagController;
 use App\Http\Controllers\Api\V1\UploadController;
@@ -62,3 +64,6 @@ Route::middleware('auth:sanctum')->prefix('submissions')->group(function () {
 
 Route::get('tags/autocomplete', [TagController::class, 'autocomplete']);
 Route::get('tags/{slug}', [TagController::class, 'show']);
+
+Route::get('browse', BrowseController::class);
+Route::get('search', SearchController::class)->middleware('throttle:search');

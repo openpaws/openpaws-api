@@ -73,6 +73,7 @@ class SubmissionController extends Controller
 
             return $submission;
         });
+        $this->reindex($submission);
 
         return (new SubmissionResource($submission->load(['user', 'tags', 'assets', 'folders'])))->response()->setStatusCode(201);
     }
@@ -110,8 +111,15 @@ class SubmissionController extends Controller
             return $affected;
         });
         Tag::recount($affected);
+        $this->reindex($submission);
 
         return new SubmissionResource($submission->load(['user', 'tags', 'assets', 'folders']));
+    }
+
+    /** Tags are synced after the row is saved, so refresh the search document once everything is committed. */
+    private function reindex(Submission $submission): void
+    {
+        $submission->unsetRelation('tags')->unsetRelation('user')->searchable();
     }
 
     public function destroy(Submission $submission)

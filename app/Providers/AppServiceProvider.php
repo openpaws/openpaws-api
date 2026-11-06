@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Submission;
 use App\Models\User;
+use App\Search\TagAwareCollectionEngine;
 use App\Storage\ObjectStorage;
 use App\Storage\S3ObjectStorage;
 use Illuminate\Auth\Notifications\ResetPassword;
@@ -13,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Scout\EngineManager;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -29,6 +31,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->app->make(EngineManager::class)->extend('collection', fn () => new TagAwareCollectionEngine);
+
         Relation::morphMap(['submission' => Submission::class, 'user' => User::class]);
 
         // Every single-submission route resolves through visibleTo: not visible => 404.
@@ -41,6 +45,7 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(5)
             ->by($request->ip().'|'.strtolower((string) $request->input('login'))));
         RateLimiter::for('register', fn (Request $request) => Limit::perHour(3)->by($request->ip()));
+        RateLimiter::for('search', fn (Request $request) => Limit::perMinute(60)->by($request->ip()));
         RateLimiter::for('uploads', fn (Request $request) => Limit::perHour(30)->by($request->user()?->id ?: $request->ip()));
     }
 }
