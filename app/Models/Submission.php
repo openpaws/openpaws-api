@@ -48,6 +48,11 @@ class Submission extends Model
         return $this->belongsToMany(Tag::class, 'submission_tag')->orderBy('tags.slug');
     }
 
+    public function folders(): BelongsToMany
+    {
+        return $this->belongsToMany(Folder::class)->withPivot('position')->orderBy('folders.position');
+    }
+
     public function assets(): MorphMany
     {
         return $this->morphMany(MediaAsset::class, 'owner');

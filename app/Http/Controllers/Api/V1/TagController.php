@@ -43,7 +43,7 @@ class TagController extends Controller
         $page = Submission::query()
             ->listedFor($request->user('sanctum'))
             ->whereIn('submissions.id', DB::table('submission_tag')->where('tag_id', $tag->id)->select('submission_id'))
-            ->with(['user', 'tags', 'assets'])
+            ->with(['user', 'tags', 'assets', 'folders'])
             ->orderByDesc('submissions.published_at')->orderByDesc('submissions.id')
             ->cursorPaginate($perPage);
 

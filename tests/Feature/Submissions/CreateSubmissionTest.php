@@ -30,7 +30,7 @@ it('creates an image submission from an uploaded session and dispatches processi
         ->assertJsonPath('data.visibility', 'public')
         ->assertJsonPath('data.description_html', '<p><strong>hi</strong></p>')
         ->assertJsonPath('data.tags', ['fox', 'sunset'])
-        ->assertJsonPath('data.folders', [])
+        ->assertJsonPath('data.folders.0.kind', 'gallery')
         ->assertJsonPath('data.media', [])
         ->assertJsonPath('data.views_count', 0)
         ->assertJsonPath('data.published_at', null)

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\PlaceSubmission;
 use App\Enums\SubmissionStatus;
 use App\Enums\SubmissionType;
 use App\Enums\UploadKind;
@@ -39,9 +40,9 @@ class SubmissionController extends Controller
         $data = $request->validated();
         $type = SubmissionType::from($data['type']);
         $tags = $request->normalizedTags() ?? [];
-        // Folder is validated by the request; it is persisted from Task 10.
+        $folder = $data['folder'] ?? 'gallery';
 
-        $submission = DB::transaction(function () use ($user, $data, $type, $tags) {
+        $submission = DB::transaction(function () use ($user, $data, $type, $tags, $folder) {
             $main = isset($data['upload_session_id'])
                 ? $this->lockSession($user, 'upload_session_id', $data['upload_session_id'], $type->uploadKind())
                 : null;
@@ -63,6 +64,8 @@ class SubmissionController extends Controller
             $submission->save();
             $submission->tags()->sync($this->resolveTagIds($tags));
 
+            app(PlaceSubmission::class)->handle($user, $submission, $folder);
+
             $main?->consume();
             $cover?->consume();
 
@@ -71,23 +74,24 @@ class SubmissionController extends Controller
             return $submission;
         });
 
-        return (new SubmissionResource($submission->load(['user', 'tags', 'assets'])))->response()->setStatusCode(201);
+        return (new SubmissionResource($submission->load(['user', 'tags', 'assets', 'folders'])))->response()->setStatusCode(201);
     }
 
     public function show(Request $request, Submission $submission)
     {
         ViewCounter::record($submission, $request->user('sanctum'), (string) $request->ip(), (string) $request->userAgent());
 
-        return (new SubmissionResource($submission->load(['user', 'tags', 'assets'])))->withBody();
+        return (new SubmissionResource($submission->load(['user', 'tags', 'assets', 'folders'])))->withBody();
     }
 
     public function update(UpdateSubmissionRequest $request, Submission $submission)
     {
         $data = $request->validated();
-        unset($data['tags'], $data['folder']); // folder is validated only until Task 10
+        $folder = $data['folder'] ?? null;
+        unset($data['tags'], $data['folder']);
         $tags = $request->normalizedTags();
 
-        $affected = DB::transaction(function () use ($submission, $data, $tags) {
+        $affected = DB::transaction(function () use ($submission, $data, $tags, $folder, $request) {
             $affected = $submission->tags()->pluck('tags.id')->all();
             $wasPrivate = MediaPaths::isPrivate($submission->rating);
             $submission->fill($data)->save();
@@ -95,6 +99,9 @@ class SubmissionController extends Controller
                 // Crossed the adult boundary: move the files between public/ and private/.
                 // MediaUrls already signs/unsigns by the new rating, so this can lag safely.
                 MoveSubmissionMedia::dispatch($submission)->afterCommit();
+            }
+            if ($folder !== null) {
+                app(PlaceSubmission::class)->handle($request->user(), $submission, $folder);
             }
             if ($tags !== null) {
                 $affected = array_merge($affected, $submission->tags()->sync($this->resolveTagIds($tags))['attached']);
@@ -104,7 +111,7 @@ class SubmissionController extends Controller
         });
         Tag::recount($affected);
 
-        return new SubmissionResource($submission->load(['user', 'tags', 'assets']));
+        return new SubmissionResource($submission->load(['user', 'tags', 'assets', 'folders']));
     }
 
     public function destroy(Submission $submission)
@@ -160,7 +167,7 @@ class SubmissionController extends Controller
             ProcessSubmission::dispatch($locked, $main?->id, $cover?->id)->afterCommit();
         });
 
-        return new SubmissionResource($submission->refresh()->load(['user', 'tags', 'assets']));
+        return new SubmissionResource($submission->refresh()->load(['user', 'tags', 'assets', 'folders']));
     }
 
     /**

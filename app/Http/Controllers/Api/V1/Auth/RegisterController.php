@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Auth;
 
+use App\Actions\CreateDefaultFolders;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Resources\UserResource;
@@ -23,6 +24,7 @@ class RegisterController extends Controller
         ]);
 
         $user->profile()->create();
+        app(CreateDefaultFolders::class)->handle($user);
 
         $user = $user->fresh();
         event(new Registered($user)); // sends the verification email

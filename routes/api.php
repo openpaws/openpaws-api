@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\PasswordController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
+use App\Http\Controllers\Api\V1\FolderController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\SubmissionController;
@@ -33,6 +34,15 @@ Route::middleware('auth:sanctum')->prefix('me')->group(function () {
 });
 
 Route::get('users/{username}', [UserController::class, 'show']);
+Route::get('users/{username}/folders', [UserController::class, 'folders']);
+Route::get('users/{username}/submissions', [UserController::class, 'submissions']);
+
+Route::middleware('auth:sanctum')->prefix('folders')->group(function () {
+    Route::post('/', [FolderController::class, 'store']);
+    Route::patch('{publicId}', [FolderController::class, 'update']);
+    Route::delete('{publicId}', [FolderController::class, 'destroy']);
+    Route::put('{publicId}/order', [FolderController::class, 'order']);
+});
 
 Route::middleware('auth:sanctum')->prefix('uploads')->group(function () {
     Route::post('/', [UploadController::class, 'store'])->middleware('throttle:uploads');

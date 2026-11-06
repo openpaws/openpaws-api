@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Actions\PlaceSubmission;
 use App\Enums\Rating;
 use App\Enums\SubmissionStatus;
 use App\Enums\SubmissionType;
@@ -17,6 +18,15 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class SubmissionFactory extends Factory
 {
+    /** Like a real upload, a created submission lands in its owner's gallery. */
+    public function configure(): static
+    {
+        return $this->afterCreating(function (Submission $s) {
+            $s->loadMissing('user');
+            (new PlaceSubmission)->handle($s->user, $s, 'gallery');
+        });
+    }
+
     public function definition(): array
     {
         return [

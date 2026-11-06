@@ -49,7 +49,7 @@ class SubmissionResource extends JsonResource
             'published_at' => $this->published_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
             'user' => new UserResource($this->user),
-            'folders' => [], // Task 10
+            'folders' => $this->folders->map(fn ($f) => ['id' => $f->public_id, 'name' => $f->name, 'kind' => $f->kind->value])->values()->all(),
             'media' => $this->media($request),
         ];
     }

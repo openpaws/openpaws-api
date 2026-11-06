@@ -7,6 +7,7 @@ use App\Enums\SubmissionType;
 use App\Enums\Visibility;
 use App\Http\Requests\Concerns\ValidatesTags;
 use App\Rules\AdultConfirmedForRating;
+use App\Rules\SubmissionFolder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -38,7 +39,7 @@ class UpdateSubmissionRequest extends FormRequest
             'visibility' => ['sometimes', 'required', Rule::enum(Visibility::class)],
             'tags' => ['sometimes', 'array', 'max:200'],
             'tags.*' => ['string', 'max:100'],
-            'folder' => ['sometimes', 'string', 'max:100'],
+            'folder' => ['sometimes', 'bail', 'string', 'max:100', new SubmissionFolder($this->user())],
         ];
     }
 }

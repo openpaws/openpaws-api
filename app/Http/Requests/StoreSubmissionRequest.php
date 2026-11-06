@@ -7,6 +7,7 @@ use App\Enums\SubmissionType;
 use App\Enums\Visibility;
 use App\Http\Requests\Concerns\ValidatesTags;
 use App\Rules\AdultConfirmedForRating;
+use App\Rules\SubmissionFolder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -35,10 +36,9 @@ class StoreSubmissionRequest extends FormRequest
                 : ['prohibited'],
             'rating' => ['required', Rule::enum(Rating::class), new AdultConfirmedForRating($this->user())],
             'visibility' => ['required', Rule::enum(Visibility::class)],
-            // Folders are validated now but persisted from Task 10.
             'tags' => ['sometimes', 'array', 'max:200'],
             'tags.*' => ['string', 'max:100'],
-            'folder' => ['sometimes', 'string', 'max:100'],
+            'folder' => ['sometimes', 'bail', 'string', 'max:100', new SubmissionFolder($this->user())],
         ];
     }
 }
