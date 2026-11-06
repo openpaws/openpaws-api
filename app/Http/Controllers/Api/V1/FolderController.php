@@ -92,20 +92,26 @@ class FolderController extends Controller
         ]);
         $given = array_values($data['submission_ids']);
 
-        DB::transaction(function () use ($folder, $given) {
+        DB::transaction(function () use ($folder, $given, $request) {
             Folder::whereKey($folder->id)->lockForUpdate()->first();
-            $current = Submission::query()
+            // The set the owner sees in GET /users/{u}/submissions?folder=: listedFor(owner) items.
+            $listed = Submission::query()->listedFor($request->user())
                 ->join('folder_submission as fs', 'fs.submission_id', '=', 'submissions.id')
                 ->where('fs.folder_id', $folder->id)
                 ->pluck('submissions.id', 'submissions.public_id');
 
-            if (count($given) !== count(array_unique($given)) || count($given) !== $current->count()
-                || array_diff($given, $current->keys()->all()) !== []) {
-                throw ValidationException::withMessages(['submission_ids' => ['The list must contain exactly the submissions currently in the folder.']]);
+            if (count($given) !== count(array_unique($given)) || count($given) !== $listed->count()
+                || array_diff($given, $listed->keys()->all()) !== []) {
+                throw ValidationException::withMessages(['submission_ids' => ['The list must contain exactly the submissions listed in the folder.']]);
             }
-            foreach ($given as $position => $id) {
+            // Items not in the listing keep their relative order, after the reordered ones.
+            $rest = DB::table('folder_submission')->where('folder_id', $folder->id)
+                ->whereNotIn('submission_id', $listed->values())
+                ->orderBy('position')->orderBy('submission_id')->pluck('submission_id');
+            $ids = array_merge(array_map(fn ($id) => $listed[$id], $given), $rest->all());
+            foreach ($ids as $position => $submissionId) {
                 DB::table('folder_submission')->where('folder_id', $folder->id)
-                    ->where('submission_id', $current[$id])->update(['position' => $position]);
+                    ->where('submission_id', $submissionId)->update(['position' => $position]);
             }
         });
 

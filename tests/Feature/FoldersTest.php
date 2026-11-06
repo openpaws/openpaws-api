@@ -105,13 +105,34 @@ it('moving a submission from gallery to scraps removes it from gallery', functio
     expect(folderIdsOf($s->fresh()))->toBe(['gallery']);
 });
 
-it('new items are appended at the end of a folder', function () {
+it('new items are placed at the top of a folder', function () {
     $u = User::factory()->create();
     $a = Submission::factory()->for($u)->create();
     $b = Submission::factory()->for($u)->create();
     $g = folderOf($u, 'gallery');
-    $pos = DB::table('folder_submission')->where('folder_id', $g->id)->orderBy('position')->pluck('submission_id')->all();
-    expect($pos)->toBe([$a->id, $b->id]);
+    $rows = DB::table('folder_submission')->where('folder_id', $g->id)->orderBy('position')->get();
+    expect($rows->pluck('submission_id')->all())->toBe([$b->id, $a->id])
+        ->and($rows->pluck('position')->all())->toBe([-1, 0]);
+    $this->actingAs($u, 'sanctum')->patchJson("/api/v1/submissions/{$a->public_id}", ['folder' => 'scraps'])->assertOk();
+    $this->patchJson("/api/v1/submissions/{$a->public_id}", ['folder' => 'gallery'])->assertOk();
+    expect(DB::table('folder_submission')->where('folder_id', $g->id)->orderBy('position')->pluck('submission_id')->all())
+        ->toBe([$a->id, $b->id]);
+});
+
+it('reorder uses the owner-listed set and keeps unlisted items after it', function () {
+    $u = User::factory()->create();
+    $a = Submission::factory()->for($u)->create();
+    $hidden = Submission::factory()->for($u)->create(['visibility' => 'unlisted']);
+    $b = Submission::factory()->for($u)->create();
+    $g = folderOf($u, 'gallery');
+    $url = "/api/v1/folders/{$g->public_id}/order";
+
+    $this->actingAs($u, 'sanctum')->putJson($url, ['submission_ids' => [$a->public_id, $b->public_id, $hidden->public_id]])
+        ->assertStatus(422)->assertJsonStructure(['error' => ['fields' => ['submission_ids']]]);
+    $this->putJson($url, ['submission_ids' => [$a->public_id, $a->public_id]])->assertStatus(422);
+    $this->putJson($url, ['submission_ids' => [$a->public_id, $b->public_id]])->assertNoContent();
+    expect(DB::table('folder_submission')->where('folder_id', $g->id)->orderBy('position')->pluck('submission_id')->all())
+        ->toBe([$a->id, $b->id, $hidden->id]);
 });
 
 it('reorder requires exactly the folder\'s current set', function () {

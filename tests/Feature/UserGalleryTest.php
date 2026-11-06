@@ -24,7 +24,7 @@ it('user gallery listing hides unlisted, processing, and over-rating items from 
     $this->getJson('/api/v1/users/Otter/submissions')->assertOk()->assertJsonPath('meta.next_cursor', null);
 
     $this->actingAs(makeAdultUser(), 'sanctum');
-    expect(publicIds($this->getJson('/api/v1/users/otter/submissions')))->toBe([$ok->public_id, $adult->public_id]);
+    expect(publicIds($this->getJson('/api/v1/users/otter/submissions')))->toBe([$adult->public_id, $ok->public_id]);
 
     // The owner gets no exception on listings (unlisted/processing stay hidden, rating cap applies).
     $this->actingAs($u, 'sanctum');
@@ -41,7 +41,9 @@ it('lists by folder with position order then newest first, and cursor paginates'
     $s = Folder::where('user_id', $u->id)->where('kind', 'scraps')->first();
     DB::table('folder_submission')->where('submission_id', $scrap->id)->update(['folder_id' => $s->id]);
     // Positions: old=0 mid=1 new=2 -> custom order, then make mid & new tie to prove the tiebreakers.
-    DB::table('folder_submission')->where('submission_id', $new->id)->update(['position' => 1]);
+    foreach ([[$old, 0], [$mid, 1], [$new, 1]] as [$sub, $pos]) {
+        DB::table('folder_submission')->where('submission_id', $sub->id)->update(['position' => $pos]);
+    }
 
     $r = $this->getJson('/api/v1/users/otter/submissions')->assertOk();
     expect(publicIds($r))->toBe([$old->public_id, $new->public_id, $mid->public_id]);
