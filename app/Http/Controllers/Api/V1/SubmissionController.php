@@ -55,6 +55,7 @@ class SubmissionController extends Controller
                 'type' => $type,
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
+                'alt_text' => $data['alt_text'] ?? null,
                 'body' => $type === SubmissionType::Writing ? $data['body'] : null,
                 'rating' => $data['rating'],
                 'visibility' => $data['visibility'],

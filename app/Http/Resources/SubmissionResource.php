@@ -33,6 +33,7 @@ class SubmissionResource extends JsonResource
             'title' => $this->title,
             'description' => $this->description,
             'description_html' => Markdown::toSafeHtml($this->description),
+            'alt_text' => $this->alt_text,
         ];
 
         if ($this->includeBody && $this->type === SubmissionType::Writing) {

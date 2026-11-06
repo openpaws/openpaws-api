@@ -32,6 +32,8 @@ class UpdateSubmissionRequest extends FormRequest
         return [
             'title' => ['sometimes', 'required', 'string', 'min:1', 'max:150'],
             'description' => ['sometimes', 'nullable', 'string', 'max:20000'],
+            // Describes the image for screen readers (U11); accepted for every type, used for images.
+            'alt_text' => ['sometimes', 'nullable', 'string', 'max:500'],
             'body' => $isWriting
                 ? ['sometimes', 'required', 'string', 'max:500000']
                 : ['prohibited'],
