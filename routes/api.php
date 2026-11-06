@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\PasswordController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\SubmissionController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
@@ -36,4 +37,11 @@ Route::middleware('auth:sanctum')->prefix('uploads')->group(function () {
     Route::post('/', [UploadController::class, 'store'])->middleware('throttle:uploads');
     Route::post('{id}/parts', [UploadController::class, 'parts']);
     Route::post('{id}/complete', [UploadController::class, 'complete']);
+});
+
+Route::get('submissions/{submission}', [SubmissionController::class, 'show']);
+Route::middleware('auth:sanctum')->prefix('submissions')->group(function () {
+    Route::post('/', [SubmissionController::class, 'store']);
+    Route::patch('{submission}', [SubmissionController::class, 'update']);
+    Route::delete('{submission}', [SubmissionController::class, 'destroy']);
 });

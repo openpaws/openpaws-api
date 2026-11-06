@@ -2,12 +2,16 @@
 
 namespace App\Providers;
 
+use App\Models\Submission;
+use App\Models\User;
 use App\Storage\ObjectStorage;
 use App\Storage\S3ObjectStorage;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -25,6 +29,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Relation::morphMap(['submission' => Submission::class, 'user' => User::class]);
+
+        // Every single-submission route resolves through visibleTo: not visible => 404.
+        Route::bind('submission', fn (string $value) => Submission::visibleTo(auth('sanctum')->user())
+            ->where('public_id', $value)->firstOrFail());
+
         ResetPassword::createUrlUsing(fn ($user, string $token) => rtrim(config('openpaws.ui_url'), '/')
             .'/reset-password?token='.urlencode($token).'&email='.urlencode($user->getEmailForPasswordReset()));
 

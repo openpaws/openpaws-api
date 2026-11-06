@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateProfileRequest extends FormRequest
 {
@@ -16,7 +17,10 @@ class UpdateProfileRequest extends FormRequest
             'links.*.label' => ['required', 'string', 'min:1', 'max:50'],
             'links.*.url' => ['required', 'string', 'max:2048', 'url:http,https'],
             'pinned_submission_ids' => ['sometimes', 'array', 'max:6'],
-            'pinned_submission_ids.*' => ['integer'],
+            // Public ids of the user's own, non-deleted submissions.
+            'pinned_submission_ids.*' => ['string', 'distinct', Rule::exists('submissions', 'public_id')
+                ->where('user_id', $this->user()->id)
+                ->whereNull('deleted_at')],
         ];
     }
 }
