@@ -1,7 +1,10 @@
 <?php
 
+use App\Jobs\ProcessSubmission;
+use App\Models\Submission;
 use App\Models\UploadSession;
 use App\Models\User;
+use App\Storage\ObjectStorage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -21,4 +24,52 @@ function makeUploadSession(User $user, string $kind = 'image', string $status = 
 function makeAdultUser(string $maxRating = 'adult'): User
 {
     return User::factory()->create(['adult_confirmed_at' => now(), 'max_rating' => $maxRating]);
+}
+
+/** Absolute path of a media fixture. */
+function mediaFixture(string $name): string
+{
+    return base_path('tests/Fixtures/media/'.$name);
+}
+
+/** A consumed upload session whose staged object is the given fixture (as when the job runs). */
+function stagedSession(User $user, string $kind, string $fixture): UploadSession
+{
+    $session = makeUploadSession($user, $kind, 'consumed');
+    app(ObjectStorage::class)->simulateUpload($session->path, mediaFixture($fixture));
+
+    return $session;
+}
+
+/** A submission waiting for processing. */
+function processingSubmission(User $user, string $type): Submission
+{
+    return Submission::factory()->for($user)->create([
+        'type' => $type, 'status' => 'processing', 'published_at' => null,
+        'body' => $type === 'writing' ? '# Story' : null,
+    ]);
+}
+
+/**
+ * Runs ProcessSubmission the way the queue worker ends up doing: handle(), and on an
+ * exception (after retries are exhausted) failed(). Returns the exception, if any.
+ */
+function runProcessing(Submission $s, ?UploadSession $main, ?UploadSession $cover = null): ?Throwable
+{
+    $job = new ProcessSubmission($s, $main?->id, $cover?->id);
+    try {
+        app()->call([$job, 'handle']);
+
+        return null;
+    } catch (Throwable $e) {
+        $job->failed($e);
+
+        return $e;
+    }
+}
+
+/** Local path of an object in the fake object store. */
+function storedObject(string $path): string
+{
+    return storage_path('framework/testing/objects/'.$path);
 }

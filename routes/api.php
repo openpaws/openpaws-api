@@ -44,4 +44,5 @@ Route::middleware('auth:sanctum')->prefix('submissions')->group(function () {
     Route::post('/', [SubmissionController::class, 'store']);
     Route::patch('{submission}', [SubmissionController::class, 'update']);
     Route::delete('{submission}', [SubmissionController::class, 'destroy']);
+    Route::post('{submission}/retry', [SubmissionController::class, 'retry']);
 });

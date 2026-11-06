@@ -15,10 +15,12 @@ use App\Jobs\ProcessSubmission;
 use App\Models\Submission;
 use App\Models\UploadSession;
 use App\Models\User;
+use App\Storage\ObjectStorage;
 use App\Support\ViewCounter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -88,6 +90,54 @@ class SubmissionController extends Controller
         $submission->delete();
 
         return response()->noContent();
+    }
+
+    /**
+     * POST /submissions/{publicId}/retry: reprocess a failed submission from a new upload.
+     * Session rules are the same as for creation; writing may retry without a document.
+     */
+    public function retry(Request $request, Submission $submission, ObjectStorage $storage)
+    {
+        Gate::authorize('update', $submission);
+        $this->ensureFailed($submission);
+
+        $user = $request->user();
+        $type = $submission->type;
+        $data = $request->validate([
+            'upload_session_id' => [Rule::requiredIf($type->requiresUpload()), 'nullable', 'string', 'max:64'],
+            'cover_upload_session_id' => [Rule::prohibitedIf(! $type->allowsCover()), 'nullable', 'string', 'max:64'],
+        ]);
+
+        DB::transaction(function () use ($user, $data, $type, $submission, $storage) {
+            $locked = Submission::whereKey($submission->getKey())->lockForUpdate()->firstOrFail();
+            $this->ensureFailed($locked);
+
+            $main = isset($data['upload_session_id'])
+                ? $this->lockSession($user, 'upload_session_id', $data['upload_session_id'], $type->uploadKind())
+                : null;
+            $cover = isset($data['cover_upload_session_id'])
+                ? $this->lockSession($user, 'cover_upload_session_id', $data['cover_upload_session_id'], UploadKind::Cover)
+                : null;
+
+            if ($locked->assets()->delete() > 0) {
+                $storage->deletePrefix("media/{$locked->public_id}/");
+            }
+            $locked->forceFill(['status' => SubmissionStatus::Processing, 'published_at' => null])->save();
+
+            $main?->consume();
+            $cover?->consume();
+
+            ProcessSubmission::dispatch($locked, $main?->id, $cover?->id)->afterCommit();
+        });
+
+        return new SubmissionResource($submission->refresh()->load('user'));
+    }
+
+    private function ensureFailed(Submission $submission): void
+    {
+        if ($submission->status !== SubmissionStatus::Failed) {
+            throw new DomainError('invalid_state', 'Only submissions whose processing failed can be retried.');
+        }
     }
 
     /**
