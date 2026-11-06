@@ -161,14 +161,19 @@ class SubmissionController extends Controller
             return [];
         }
 
+        // Take row locks in slug order: concurrent requests with the same tags in a different
+        // order would otherwise lock rows in opposite orders and deadlock.
+        $sorted = array_values(array_unique($slugs));
+        sort($sorted, SORT_STRING);
+
         // insertOrIgnore is race-safe against the unique slug index (concurrent creators).
         $now = now();
         Tag::insertOrIgnore(array_map(
             fn (string $slug) => ['slug' => $slug, 'usage_count' => 0, 'created_at' => $now, 'updated_at' => $now],
-            $slugs,
+            $sorted,
         ));
         // A locking read sees the latest committed rows, unlike the transaction's REPEATABLE READ snapshot.
-        $ids = Tag::whereIn('slug', $slugs)->lockForUpdate()->pluck('id', 'slug');
+        $ids = Tag::whereIn('slug', $sorted)->orderBy('slug')->lockForUpdate()->pluck('id', 'slug');
 
         return array_map(
             fn (string $slug) => (int) ($ids[$slug] ?? throw new \RuntimeException("Tag [{$slug}] could not be resolved.")),

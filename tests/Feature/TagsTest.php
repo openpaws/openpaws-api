@@ -205,13 +205,33 @@ it('tag creation survives a concurrent creator inserting the same slug', functio
 });
 
 it('tag id resolution throws instead of returning id 0 when a slug cannot be found', function () {
-    $listener = function (string $query) {
-        if (preg_match('/^select .* from [`"]?tags[`"]? where .*for update/is', $query)) {
+    $active = true;
+    DB::beforeExecuting(function (string $query) use (&$active) {
+        if ($active && preg_match('/^select .* from [`"]?tags[`"]? where .*for update/is', $query)) {
             DB::table('tags')->where('slug', 'ghost')->delete();
         }
-    };
-    DB::beforeExecuting($listener);
+    });
 
-    $method = new ReflectionMethod(SubmissionController::class, 'resolveTagIds');
-    DB::transaction(fn () => $method->invoke(new SubmissionController, ['ghost']));
+    try {
+        resolveTagIdsFor(['ghost']);
+    } finally {
+        $active = false;
+    }
 })->throws(RuntimeException::class, 'ghost');
+
+function resolveTagIdsFor(array $slugs): array
+{
+    $method = new ReflectionMethod(SubmissionController::class, 'resolveTagIds');
+
+    return DB::transaction(fn () => $method->invoke(new SubmissionController, $slugs));
+}
+
+it('tag id resolution returns ids in the input order regardless of lock order', function () {
+    $ab = resolveTagIdsFor(['wolf', 'fox']);
+    $ba = resolveTagIdsFor(['fox', 'wolf']);
+
+    $ids = Tag::pluck('id', 'slug');
+    expect($ab)->toBe([$ids['wolf'], $ids['fox']])
+        ->and($ba)->toBe([$ids['fox'], $ids['wolf']])
+        ->and(Tag::count())->toBe(2);
+});
