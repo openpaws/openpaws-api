@@ -10,6 +10,8 @@ use ZipArchive;
 /** Identifies files by their real bytes rather than by name or the browser's claimed type. */
 final class FileSignature
 {
+    private const SNIFF_BYTES = 1048576;
+
     private const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
     private const ODT = 'application/vnd.oasis.opendocument.text';
@@ -44,7 +46,17 @@ final class FileSignature
 
     public static function detect(string $localPath): string
     {
-        $mime = (new finfo(FILEINFO_MIME_TYPE))->file($localPath);
+        // Only the head is needed for magic-byte sniffing; finfo->file() can load far more into memory.
+        $handle = @fopen($localPath, 'rb');
+        if ($handle === false) {
+            return 'application/octet-stream';
+        }
+        try {
+            $head = fread($handle, self::SNIFF_BYTES);
+        } finally {
+            fclose($handle);
+        }
+        $mime = is_string($head) && $head !== '' ? (new finfo(FILEINFO_MIME_TYPE))->buffer($head) : false;
 
         return is_string($mime) ? $mime : 'application/octet-stream';
     }

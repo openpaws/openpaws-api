@@ -11,8 +11,9 @@ Run each in its own terminal (or background it with `nohup`, logs under `storage
 # HTTP API
 php artisan serve --port=8000
 
-# Queue worker; the queue order matters (moves first so rating flips are not stuck behind transcodes)
-php artisan queue:work redis --queue=moves,media,video,default
+# Queue worker; 512M so large video/audio processing never hits the 64M php.ini default;
+# the queue order matters (moves first so rating flips are not stuck behind transcodes)
+php -d memory_limit=512M artisan queue:work redis --queue=moves,media,video,default
 
 # Scheduler (pruning stale uploads etc.)
 php artisan schedule:work
@@ -22,10 +23,6 @@ Note: `php artisan serve` only forwards a fixed allow-list of environment variab
 PHP server, so per-run overrides such as `OPENPAWS_SIGNED_MEDIA_TTL=5 php artisan serve`
 are ignored. Put them in `.env`, or run the server directly:
 `cd public && OPENPAWS_SIGNED_MEDIA_TTL=5 php -S 127.0.0.1:8000 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php`.
-
-The worker's PHP `memory_limit` comes from `/etc/php85/php.ini` (64M on this box). Large
-video uploads (> ~100 MB) can exhaust it in `FileSignature::detect`; start the worker with
-`php -d memory_limit=512M artisan queue:work ...` when processing big files.
 
 ## Search index
 

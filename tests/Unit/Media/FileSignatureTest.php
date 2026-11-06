@@ -64,3 +64,28 @@ it('accepts plain text and pdf documents', function () {
 
     array_map(unlink(...), [$txt, $pdf]);
 });
+
+it('sniffs a very large file without loading it into memory', function () {
+    $dir = sys_get_temp_dir().'/opaws-big-'.uniqid();
+    mkdir($dir);
+    $big = $dir.'/big.mp4';
+    try {
+        copy(mediaFixture('video.mp4'), $big);
+        $out = fopen($big, 'ab');
+        $chunk = str_repeat("\0", 1024 * 1024);
+        for ($i = 0; $i < 100; $i++) {
+            fwrite($out, $chunk);
+        }
+        fclose($out);
+
+        $code = 'require "'.base_path('vendor/autoload.php').'"; echo App\Media\FileSignature::detect($argv[1]);';
+        $process = new Symfony\Component\Process\Process([PHP_BINARY, '-d', 'memory_limit=16M', '-r', $code, '--', $big]);
+        $process->run();
+
+        expect($process->getExitCode())->toBe(0, $process->getErrorOutput())
+            ->and($process->getOutput())->toBe('video/mp4');
+    } finally {
+        @unlink($big);
+        @rmdir($dir);
+    }
+});
