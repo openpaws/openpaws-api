@@ -6,8 +6,10 @@ use App\Enums\Rating;
 use App\Enums\SubmissionType;
 use App\Enums\Visibility;
 use App\Http\Requests\Concerns\ValidatesTags;
+use App\Models\User;
 use App\Rules\AdultConfirmedForRating;
 use App\Rules\SubmissionFolder;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,6 +20,11 @@ class StoreSubmissionRequest extends FormRequest
     public function authorize(): bool
     {
         return $this->user()?->hasVerifiedEmail() === true;
+    }
+
+    protected function failedAuthorization(): void
+    {
+        throw new AuthorizationException(User::UNVERIFIED_EMAIL_MESSAGE);
     }
 
     public function rules(): array

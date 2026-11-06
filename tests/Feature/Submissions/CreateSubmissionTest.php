@@ -184,7 +184,7 @@ it('requires auth and a verified email', function () {
     $this->postJson('/api/v1/submissions', [])->assertUnauthorized()->assertJsonPath('error.code', 'unauthenticated');
     $u = User::factory()->unverified()->create();
     createSubmission($this, $u, ['upload_session_id' => makeUploadSession($u)->id])
-        ->assertForbidden()->assertJsonPath('error.code', 'forbidden');
+        ->assertForbidden()->assertExactJson(['error' => ['code' => 'forbidden', 'message' => 'Verify your email address to continue.']]);
     expect(Submission::count())->toBe(0);
 });
 

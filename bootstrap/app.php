@@ -43,14 +43,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (DomainError $e, Request $r) => $e->render());
         $exceptions->render(fn (ValidationException $e, Request $r) => $error('validation_failed', $e->getMessage(), 422, $e->errors()));
         $exceptions->render(fn (AuthenticationException $e, Request $r) => $error('unauthenticated', 'Unauthenticated.', 401));
-        $exceptions->render(fn (AuthorizationException $e, Request $r) => $error('forbidden', 'Forbidden.', 403));
+        // Code stays `forbidden`; a specific message (e.g. "Verify your email address to continue.")
+        // is passed through so the UI can show it. No message or the framework default => "Forbidden." (R32)
+        $forbiddenMessage = fn (string $message): string => in_array(trim($message), ['', 'This action is unauthorized.'], true)
+            ? 'Forbidden.' : $message;
+        $exceptions->render(fn (AuthorizationException $e, Request $r) => $error('forbidden', $forbiddenMessage($e->getMessage()), 403));
         $exceptions->render(fn (ModelNotFoundException $e, Request $r) => $error('not_found', 'Not found.', 404));
         $exceptions->render(fn (NotFoundHttpException $e, Request $r) => $error('not_found', 'Not found.', 404));
         $exceptions->render(fn (ThrottleRequestsException $e, Request $r) => $error('rate_limited', 'Too many requests.', 429));
-        $exceptions->render(function (HttpExceptionInterface $e, Request $r) use ($error) {
+        $exceptions->render(function (HttpExceptionInterface $e, Request $r) use ($error, $forbiddenMessage) {
             $status = $e->getStatusCode();
             if ($status === 403) {
-                return $error('forbidden', 'Forbidden.', 403);
+                return $error('forbidden', $forbiddenMessage($e->getMessage()), 403);
             }
             if ($status === 429) {
                 return $error('rate_limited', 'Too many requests.', 429);

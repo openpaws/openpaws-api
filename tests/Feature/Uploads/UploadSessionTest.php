@@ -57,7 +57,7 @@ it('rejects a declared mime not allowed for the kind', function () {
 
 it('requires a verified email to upload', function () {
     startUploadReq($this, User::factory()->unverified()->create())
-        ->assertForbidden()->assertJsonPath('error.code', 'forbidden');
+        ->assertForbidden()->assertExactJson(['error' => ['code' => 'forbidden', 'message' => 'Verify your email address to continue.']]);
 });
 
 it('enforces daily quota by count and bytes', function () {

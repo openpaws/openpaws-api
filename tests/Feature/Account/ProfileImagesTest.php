@@ -88,7 +88,9 @@ it('requires a verified email', function () {
     $u = User::factory()->unverified()->create();
     $s = stagedProfileSession($u, 'avatar');
     $this->actingAs($u, 'sanctum')->putJson('/api/v1/me/avatar', ['upload_session_id' => $s->id])
-        ->assertStatus(403)->assertJsonPath('error.code', 'forbidden');
+        ->assertStatus(403)->assertExactJson(['error' => ['code' => 'forbidden', 'message' => 'Verify your email address to continue.']]);
+    $this->putJson('/api/v1/me/banner', ['upload_session_id' => stagedProfileSession($u, 'banner')->id])
+        ->assertStatus(403)->assertExactJson(['error' => ['code' => 'forbidden', 'message' => 'Verify your email address to continue.']]);
 });
 
 it('replacing avatar deletes the old object', function () {

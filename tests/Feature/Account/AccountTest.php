@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Notification;
 it('adult confirmation requires verified email', function () {
     $u = User::factory()->unverified()->create();
     $this->actingAs($u)->postJson('/api/v1/me/adult-confirmation', ['confirm' => true])
-        ->assertForbidden()->assertJsonPath('error.code', 'forbidden');
+        ->assertForbidden()->assertExactJson(['error' => ['code' => 'forbidden', 'message' => 'Verify your email address to continue.']]);
 
     $v = User::factory()->create();
     $this->actingAs($v)->postJson('/api/v1/me/adult-confirmation', ['confirm' => true])

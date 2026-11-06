@@ -7,6 +7,7 @@ use App\Enums\UploadKind;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Jobs\ProcessProfileImage;
+use App\Models\User;
 use App\Uploads\LocksUploadSession;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -82,7 +83,7 @@ class MeController extends Controller
         $request->validate(['confirm' => ['required', 'accepted']]);
         $user = $request->user();
         if (! $user->hasVerifiedEmail()) {
-            throw new AuthorizationException('Verify your email before confirming you are 18+.');
+            throw new AuthorizationException(User::UNVERIFIED_EMAIL_MESSAGE);
         }
         $user->adult_confirmed_at ??= now();
         $user->save();
@@ -105,7 +106,7 @@ class MeController extends Controller
     {
         $user = $request->user();
         if (! $user->hasVerifiedEmail()) {
-            throw new AuthorizationException('Verify your email to change your profile images.');
+            throw new AuthorizationException(User::UNVERIFIED_EMAIL_MESSAGE);
         }
         $data = $request->validate(['upload_session_id' => ['required', 'uuid']]);
 

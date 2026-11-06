@@ -8,6 +8,7 @@ use App\Exceptions\DomainError;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UploadSessionResource;
 use App\Models\UploadSession;
+use App\Models\User;
 use App\Storage\ObjectStorage;
 use App\Uploads\UploadLimits;
 use App\Uploads\UploadQuota;
@@ -23,7 +24,7 @@ class UploadController extends Controller
     {
         $user = $request->user();
         if (! $user->hasVerifiedEmail()) {
-            throw new AuthorizationException('Verify your email to upload files.');
+            throw new AuthorizationException(User::UNVERIFIED_EMAIL_MESSAGE);
         }
 
         $data = $request->validate([

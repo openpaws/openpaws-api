@@ -35,7 +35,7 @@ it('only the owner can PATCH and DELETE', function () {
         $this->actingAs($other, 'sanctum')->deleteJson("/api/v1/submissions/{$s->public_id}")->assertNotFound();
     }
     $this->actingAs($other, 'sanctum')->patchJson("/api/v1/submissions/{$visible->public_id}", ['title' => 'x'])
-        ->assertForbidden()->assertJsonPath('error.code', 'forbidden');
+        ->assertForbidden()->assertExactJson(['error' => ['code' => 'forbidden', 'message' => 'Forbidden.']]);
     $this->actingAs($other, 'sanctum')->deleteJson("/api/v1/submissions/{$visible->public_id}")->assertForbidden();
 
     expect($visible->fresh()->title)->not->toBe('x')->and(Submission::count())->toBe(3);

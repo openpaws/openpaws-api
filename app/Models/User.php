@@ -11,6 +11,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -18,6 +19,9 @@ use Illuminate\Notifications\Notifiable;
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
+    /** The 403 message for actions that need a verified email (uploads, submissions, 18+, profile images). */
+    public const UNVERIFIED_EMAIL_MESSAGE = 'Verify your email address to continue.';
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
@@ -45,7 +49,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->max_rating ?? Rating::General;
     }
 
-    public function profile(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function profile(): HasOne
     {
         return $this->hasOne(Profile::class);
     }
