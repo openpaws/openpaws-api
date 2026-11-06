@@ -13,6 +13,7 @@ class TagResource extends JsonResource
 
     public function toArray(Request $request): array
     {
-        return ['slug' => $this->slug, 'usage_count' => (int) $this->usage_count];
+        // The count the viewer may see, never the all-ratings total.
+        return ['slug' => $this->slug, 'usage_count' => $this->visibleUsage($request->user('sanctum'))];
     }
 }

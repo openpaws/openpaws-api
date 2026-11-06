@@ -108,6 +108,6 @@ it('does not run extra queries per submission on the gallery listing', function 
 it('submissions in profile pinned and tag pages carry folders without extra queries', function () {
     $u = User::factory()->create(['username' => 'otter']);
     $s = Submission::factory()->for($u)->create();
-    $s->tags()->create(['slug' => 'fox', 'usage_count' => 1]);
+    $s->tags()->create(['slug' => 'fox', 'usage_count' => 1, 'usage_general' => 1]);
     $this->getJson('/api/v1/tags/fox')->assertOk()->assertJsonPath('data.0.folders.0.kind', 'gallery');
 });

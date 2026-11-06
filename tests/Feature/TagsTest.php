@@ -272,3 +272,50 @@ it('recount inside a transaction runs only after the commit', function () {
     });
     expect($tag->fresh()->usage_count)->toBe(1);
 });
+
+it('recount keeps one count per rating and usage_count as their sum', function () {
+    $o = User::factory()->create(['adult_confirmed_at' => now()]);
+    tagged($o, ['fox'], ['rating' => Rating::General]);
+    tagged($o, ['fox'], ['rating' => Rating::Mature]);
+    tagged($o, ['fox'], ['rating' => Rating::Mature]);
+    tagged($o, ['fox'], ['rating' => Rating::Adult]);
+    tagged($o, ['fox'], ['rating' => Rating::Adult, 'visibility' => Visibility::Unlisted]);
+
+    $tag = Tag::where('slug', 'fox')->first();
+    expect([$tag->usage_general, $tag->usage_mature, $tag->usage_adult, $tag->usage_count])->toBe([1, 2, 1, 4])
+        ->and($tag->visibleUsage(null))->toBe(1)
+        ->and($tag->visibleUsage(makeAdultUser('mature')))->toBe(3)
+        ->and($tag->visibleUsage(makeAdultUser('adult')))->toBe(4);
+
+    Submission::where('rating', Rating::Mature->value)->update(['rating' => Rating::General->value]);
+    Tag::recount([$tag->id]);
+    $tag->refresh();
+    expect([$tag->usage_general, $tag->usage_mature, $tag->usage_adult, $tag->usage_count])->toBe([3, 0, 1, 4]);
+});
+
+it('autocomplete counts and orders by what the viewer may see', function () {
+    $o = User::factory()->create(['adult_confirmed_at' => now()]);
+    tagged($o, ['wolf']);
+    tagged($o, ['wolfpack'], ['rating' => Rating::Adult]);
+    tagged($o, ['wolfpack'], ['rating' => Rating::Adult]);
+    tagged($o, ['wolfpack']);
+
+    $this->getJson('/api/v1/tags/autocomplete?q=wol')->assertExactJson(['data' => [
+        ['slug' => 'wolf', 'usage_count' => 1],
+        ['slug' => 'wolfpack', 'usage_count' => 1],
+    ]]);
+    $this->actingAs(makeAdultUser('adult'), 'sanctum')->getJson('/api/v1/tags/autocomplete?q=wol')->assertExactJson(['data' => [
+        ['slug' => 'wolfpack', 'usage_count' => 3],
+        ['slug' => 'wolf', 'usage_count' => 1],
+    ]]);
+});
+
+it('tag page through an alias 404s when the target is used only above the viewer rating', function () {
+    $o = User::factory()->create(['adult_confirmed_at' => now()]);
+    tagged($o, ['canine'], ['rating' => Rating::Adult]);
+    TagAlias::create(['alias_slug' => 'doggo', 'tag_id' => Tag::where('slug', 'canine')->value('id')]);
+
+    $this->getJson('/api/v1/tags/doggo')->assertNotFound()->assertJsonPath('error.code', 'not_found');
+    $this->actingAs(makeAdultUser('adult'), 'sanctum')->getJson('/api/v1/tags/doggo')->assertOk()
+        ->assertJsonPath('tag.slug', 'canine')->assertJsonPath('tag.usage_count', 1);
+});

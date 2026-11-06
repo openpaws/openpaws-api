@@ -310,7 +310,7 @@ it('fake storage move renames the object', function () {
 });
 
 it('tag page includes media without a query per submission', function () {
-    $tag = Tag::create(['slug' => 'fox', 'usage_count' => 1]);
+    $tag = Tag::create(['slug' => 'fox', 'usage_count' => 1, 'usage_general' => 1]);
     $make = function () use ($tag) {
         $s = Submission::factory()->create();
         $s->tags()->attach($tag->id);

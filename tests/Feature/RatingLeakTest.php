@@ -56,7 +56,7 @@ it('lists only permitted ratings', function (string $viewer, string $url) {
     $res = test()->getJson($url)->assertOk();
 
     expect(leakRatings(collect($res->json('data'))->pluck('id')->all(), $seed))->toBe(leakSorted(LEAK_EXPECTED[$viewer]));
-    leakAssertNoAdultLeak($viewer, $seed, $res->getContent());
+    leakAssertNoHiddenLeak($viewer, $seed, $res->getContent());
 })->with('leak viewers')->with('leak list endpoints');
 
 it('submission lookup 200s only for permitted ratings', function (string $viewer) {
@@ -67,6 +67,7 @@ it('submission lookup 200s only for permitted ratings', function (string $viewer
             $res->assertOk();
             if ($name === 'adult') {
                 // Adult media is served as signed, temporary URLs.
+                expect($res->json('data.media'))->not->toBeEmpty();
                 foreach ($res->json('data.media') as $m) {
                     expect($m['url'])->toStartWith('fake://temp/private/media/')->toContain('expires=');
                 }
@@ -74,7 +75,7 @@ it('submission lookup 200s only for permitted ratings', function (string $viewer
         } else {
             $res->assertNotFound();
         }
-        leakAssertNoAdultLeak($viewer, $seed, $res->getContent());
+        leakAssertNoHiddenLeak($viewer, $seed, $res->getContent());
     }
 })->with('leak viewers');
 
@@ -87,7 +88,7 @@ it('folder counts equal the visible seeded items', function (string $viewer) {
     expect($byKind['gallery']['count'])->toBe($expected)
         ->and($byKind['scraps']['count'])->toBe(0)
         ->and($byKind['custom']['count'])->toBe($expected);
-    leakAssertNoAdultLeak($viewer, $seed, $res->getContent());
+    leakAssertNoHiddenLeak($viewer, $seed, $res->getContent());
 })->with('leak viewers');
 
 it('profile pins show only permitted ratings', function (string $viewer) {
@@ -95,17 +96,55 @@ it('profile pins show only permitted ratings', function (string $viewer) {
     $res = test()->getJson('/api/v1/users/artist')->assertOk();
 
     expect(leakRatings(collect($res->json('profile.pinned'))->pluck('id')->all(), $seed))->toBe(leakSorted(LEAK_EXPECTED[$viewer]));
-    leakAssertNoAdultLeak($viewer, $seed, $res->getContent());
+    leakAssertNoHiddenLeak($viewer, $seed, $res->getContent());
 })->with('leak viewers');
 
-/** Only the confirmed-adult viewer may see the adult submission's id or asset paths anywhere. */
-function leakAssertNoAdultLeak(string $viewer, array $seed, string $body): void
-{
-    if ($viewer === 'confirmed-adult') {
-        return;
+it('tag autocomplete suggests only tags and counts from permitted ratings', function (string $viewer) {
+    $seed = leakAs($viewer);
+    $res = test()->getJson('/api/v1/tags/autocomplete?q=leak')->assertOk();
+
+    $allowed = LEAK_EXPECTED[$viewer];
+    $expected = [['slug' => 'leak', 'usage_count' => count($allowed)]];
+    foreach (['adult', 'mature'] as $name) {
+        if (in_array($name, $allowed, true)) {
+            $expected[] = ['slug' => 'leak_'.$name, 'usage_count' => 1];
+        }
     }
-    expect($body)->not->toContain($seed['subs']['adult']->public_id);
-    foreach ($seed['paths']['adult'] as $p) {
-        expect($body)->not->toContain($p);
+    $res->assertExactJson(['data' => $expected]);
+    leakAssertNoHiddenLeak($viewer, $seed, $res->getContent());
+})->with('leak viewers');
+
+it('tag page header counts only permitted ratings and hides tags used only above them', function (string $viewer) {
+    $seed = leakAs($viewer);
+    $allowed = LEAK_EXPECTED[$viewer];
+
+    $res = test()->getJson('/api/v1/tags/leak')->assertOk()
+        ->assertJsonPath('tag.slug', 'leak')
+        ->assertJsonPath('tag.usage_count', count($allowed));
+    leakAssertNoHiddenLeak($viewer, $seed, $res->getContent());
+
+    foreach (['mature', 'adult'] as $name) {
+        $res = test()->getJson('/api/v1/tags/leak_'.$name);
+        if (in_array($name, $allowed, true)) {
+            $res->assertOk()->assertJsonPath('tag.usage_count', 1)->assertJsonCount(1, 'data');
+        } else {
+            $res->assertNotFound()->assertJsonPath('error.code', 'not_found');
+        }
+        leakAssertNoHiddenLeak($viewer, $seed, $res->getContent());
+    }
+})->with('leak viewers');
+
+/** No viewer may see the id, asset paths or own tag of a submission rated above what they may view. */
+function leakAssertNoHiddenLeak(string $viewer, array $seed, string $body): void
+{
+    foreach (['mature', 'adult'] as $name) {
+        if (in_array($name, LEAK_EXPECTED[$viewer], true)) {
+            continue;
+        }
+        expect($body)->not->toContain($seed['subs'][$name]->public_id)
+            ->not->toContain('leak_'.$name);
+        foreach ($seed['paths'][$name] as $p) {
+            expect($body)->not->toContain($p);
+        }
     }
 }
