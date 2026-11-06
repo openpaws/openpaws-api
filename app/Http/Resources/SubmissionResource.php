@@ -2,7 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\AssetRole;
 use App\Enums\SubmissionType;
+use App\Media\MediaUrls;
+use App\Models\MediaAsset;
 use App\Models\Submission;
 use App\Support\Markdown;
 use Illuminate\Http\Request;
@@ -46,7 +49,34 @@ class SubmissionResource extends JsonResource
             'created_at' => $this->created_at?->toIso8601String(),
             'user' => new UserResource($this->user),
             'folders' => [], // Task 10
-            'media' => new \stdClass, // Task 9 (MediaUrls)
+            'media' => $this->media($request),
         ];
+    }
+
+    /** Roles exposed in `media`, in output order. */
+    private const MEDIA_ROLES = [
+        AssetRole::ThumbSm, AssetRole::ThumbMd, AssetRole::ThumbLg, AssetRole::Preview, AssetRole::Original,
+        AssetRole::Transcode, AssetRole::Cover, AssetRole::Waveform, AssetRole::Document,
+    ];
+
+    /**
+     * Existing assets keyed by role. Audio and video never expose the raw upload (`original`);
+     * they expose `transcode`. Always a JSON object, even when empty.
+     */
+    private function media(Request $request): object
+    {
+        $hideOriginal = in_array($this->type, [SubmissionType::Audio, SubmissionType::Video], true);
+        $byRole = $this->assets->keyBy(fn (MediaAsset $a) => $a->role->value);
+
+        $media = [];
+        foreach (self::MEDIA_ROLES as $role) {
+            $asset = $byRole->get($role->value);
+            if ($asset === null || ($role === AssetRole::Original && $hideOriginal)) {
+                continue;
+            }
+            $media[$role->value] = (new MediaAssetResource($asset, MediaUrls::for($asset, $this->resource)))->resolve($request);
+        }
+
+        return (object) $media;
     }
 }

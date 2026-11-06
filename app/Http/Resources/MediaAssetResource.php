@@ -8,21 +8,26 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * One media entry: {url, mime, width?, height?, duration_ms?, size_bytes}.
- * The URL is supplied by MediaUrls (Task 9) via additional(['url' => ...]).
+ * Optional fields are omitted when null. The URL comes from MediaUrls.
  *
  * @mixin MediaAsset
  */
 class MediaAssetResource extends JsonResource
 {
+    public function __construct(MediaAsset $resource, private readonly string $url)
+    {
+        parent::__construct($resource);
+    }
+
     public function toArray(Request $request): array
     {
         return array_filter([
-            'url' => $this->additional['url'] ?? null,
+            'url' => $this->url,
             'mime' => $this->mime,
             'width' => $this->width,
             'height' => $this->height,
             'duration_ms' => $this->duration_ms,
             'size_bytes' => (int) $this->size_bytes,
-        ], fn ($v, $k) => $v !== null || in_array($k, ['url', 'mime', 'size_bytes'], true), ARRAY_FILTER_USE_BOTH);
+        ], fn ($v) => $v !== null);
     }
 }

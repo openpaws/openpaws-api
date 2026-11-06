@@ -19,8 +19,10 @@ it('retry: only failed submissions, with a new uploaded session, go back to proc
     $s = failedSubmission($u);
     MediaAsset::create([
         'owner_type' => 'submission', 'owner_id' => $s->id, 'role' => 'thumb_sm', 'disk' => 's3',
-        'path' => "media/{$s->public_id}/thumb_sm.webp", 'mime' => 'image/webp', 'size_bytes' => 1,
+        'path' => "public/media/{$s->public_id}/thumb_sm.webp", 'mime' => 'image/webp', 'size_bytes' => 1,
     ]);
+    $this->storage->simulateUpload("public/media/{$s->public_id}/thumb_sm.webp", mediaFixture('image.jpg'));
+    $this->storage->simulateUpload("private/media/{$s->public_id}/thumb_md.webp", mediaFixture('image.jpg'));
     $session = makeUploadSession($u, 'image');
 
     $this->actingAs($u, 'sanctum')->postJson("/api/v1/submissions/{$s->public_id}/retry", ['upload_session_id' => $session->id])
@@ -28,6 +30,8 @@ it('retry: only failed submissions, with a new uploaded session, go back to proc
 
     expect($s->fresh()->status)->toBe(SubmissionStatus::Processing)
         ->and($s->assets()->count())->toBe(0)
+        ->and($this->storage->exists("public/media/{$s->public_id}/thumb_sm.webp"))->toBeFalse()
+        ->and($this->storage->exists("private/media/{$s->public_id}/thumb_md.webp"))->toBeFalse()
         ->and($session->fresh()->status)->toBe(UploadStatus::Consumed);
     Queue::assertPushed(ProcessSubmission::class, fn ($job) => $job->submission->is($s)
         && $job->uploadSessionId === $session->id && $job->queue === 'media');

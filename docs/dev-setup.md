@@ -54,7 +54,27 @@ supervisorctl status
 . /root/openpaws-dev-secrets.env
 mcli alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
 mcli mb --ignore-existing local/openpaws
+mcli anonymous set-json docs/minio/openpaws-anonymous-policy.json local/openpaws
 ```
+
+### Bucket layout and anonymous access
+- `public/media/{public_id}/…` — general/mature submission assets, served directly via the
+  CDN (`OPENPAWS_CDN_URL`, dev `http://127.0.0.1:9000/openpaws`).
+- `private/media/{public_id}/…` — adult submission assets, only via short-lived presigned
+  URLs (`signed_media_ttl`, 600 s). Moved between the two by `MoveSubmissionMedia` when the
+  rating crosses the adult boundary.
+- `staging/…` — browser uploads awaiting processing, private.
+
+The policy (`docs/minio/openpaws-anonymous-policy.json`) grants anonymous `s3:GetObject` on
+`openpaws/public/*` and nothing else. Do **not** use the canned
+`mcli anonymous set download local/openpaws/public`: besides GetObject (on `public*`) it also
+grants anonymous `ListBucket` for prefix `public`, which would let anyone enumerate every key
+under `public/` (including unlisted submissions' unguessable paths).
+
+Check: `mcli anonymous get-json local/openpaws` shows the single GetObject statement; an
+anonymous `curl` of a `public/` object is 200, of a `private/` or `staging/` object 403,
+of `http://127.0.0.1:9000/openpaws?list-type=2&prefix=public` 403; a presigned
+`temporaryUrl` for a `private/` object is 200.
 
 ## Verify
 ```bash

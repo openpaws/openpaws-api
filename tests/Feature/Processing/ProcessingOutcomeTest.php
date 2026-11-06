@@ -61,21 +61,24 @@ it('truncated.mp4 and junk.mp3 end in failed, staging deleted, never stuck in pr
         ->and($s->published_at)->toBeNull()
         ->and($s->assets()->count())->toBe(0)
         ->and($this->storage->exists($session->path))->toBeFalse()
-        ->and(glob(storedObject("media/{$s->public_id}/*")) ?: [])->toBe([]);
+        ->and(glob(storedObject("public/media/{$s->public_id}/*")) ?: [])->toBe([])
+        ->and(glob(storedObject("private/media/{$s->public_id}/*")) ?: [])->toBe([]);
 })->with([
     'truncated video' => ['video', 'truncated.mp4'],
     'junk audio' => ['audio', 'junk.mp3'],
 ]);
 
-it('failed() removes partially uploaded media', function () {
+it('failed() removes partially uploaded media under both prefixes', function () {
     $u = User::factory()->create();
     $s = processingSubmission($u, 'image');
     $session = stagedSession($u, 'image', 'image.jpg');
-    $this->storage->simulateUpload("media/{$s->public_id}/thumb_sm.webp", mediaFixture('image.jpg'));
+    $this->storage->simulateUpload("public/media/{$s->public_id}/thumb_sm.webp", mediaFixture('image.jpg'));
+    $this->storage->simulateUpload("private/media/{$s->public_id}/thumb_md.webp", mediaFixture('image.jpg'));
 
     (new ProcessSubmission($s, $session->id))->failed(new RuntimeException('boom'));
 
-    expect($this->storage->exists("media/{$s->public_id}/thumb_sm.webp"))->toBeFalse()
+    expect($this->storage->exists("public/media/{$s->public_id}/thumb_sm.webp"))->toBeFalse()
+        ->and($this->storage->exists("private/media/{$s->public_id}/thumb_md.webp"))->toBeFalse()
         ->and($this->storage->exists($session->path))->toBeFalse()
         ->and($s->fresh()->status)->toBe(SubmissionStatus::Failed);
 });

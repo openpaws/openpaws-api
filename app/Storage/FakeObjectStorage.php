@@ -108,6 +108,14 @@ class FakeObjectStorage implements ObjectStorage
         }
     }
 
+    public function move(string $from, string $to): void
+    {
+        File::ensureDirectoryExists(dirname($this->full($to)));
+        if (! File::move($this->full($from), $this->full($to))) {
+            throw new \RuntimeException("Could not move [{$from}] to [{$to}].");
+        }
+    }
+
     public function publicUrl(string $path): string
     {
         return rtrim((string) config('openpaws.cdn_url'), '/').'/'.$path;

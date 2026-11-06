@@ -6,6 +6,7 @@ use App\Enums\SubmissionStatus;
 use App\Enums\SubmissionType;
 use App\Media\AssetDraft;
 use App\Media\FileSignature;
+use App\Media\MediaPaths;
 use App\Media\MediaProcessingFailed;
 use App\Media\Processors\AudioProcessor;
 use App\Media\Processors\ImageProcessor;
@@ -69,12 +70,21 @@ class ProcessSubmission implements ShouldQueue
             $cover = $this->download($storage, $this->coverUploadSessionId, "{$dir}/cover-upload");
 
             $drafts = $this->processor($submission->type)->process($submission, $main, $cover);
-            $rows = array_map(fn (AssetDraft $d) => $this->store($storage, $submission, $d), $drafts);
+            $prefix = MediaPaths::prefixFor($submission);
+            $rows = array_map(fn (AssetDraft $d) => $this->store($storage, $prefix, $d), $drafts);
 
-            DB::transaction(function () use ($submission, $rows) {
+            $moved = DB::transaction(function () use ($submission, $rows, $prefix) {
                 $submission->assets()->createMany($rows);
                 $submission->forceFill(['status' => SubmissionStatus::Published, 'published_at' => now()])->save();
+
+                // The rating may have changed while we were processing; if so, put the files where it says.
+                $current = Submission::withTrashed()->whereKey($submission->getKey())->sharedLock()->first();
+
+                return $current !== null && MediaPaths::prefixFor($current) !== $prefix;
             });
+            if ($moved) {
+                MoveSubmissionMedia::dispatch($submission);
+            }
             Tag::recount($submission->tags()->pluck('tags.id')->all());
         } catch (MediaProcessingFailed $e) {
             if ($e->permanent && $this->job !== null) {
@@ -111,7 +121,9 @@ class ProcessSubmission implements ShouldQueue
         try {
             $this->deleteStaging($storage);
             if ($flipped > 0) {
-                $storage->deletePrefix("media/{$submission->public_id}/");
+                foreach (MediaPaths::allPrefixes($submission) as $prefix) {
+                    $storage->deletePrefix($prefix);
+                }
             }
         } catch (Throwable $cleanup) {
             Log::warning('Cleanup after failed processing did not complete', [
@@ -149,13 +161,14 @@ class ProcessSubmission implements ShouldQueue
     }
 
     /**
-     * Uploads a draft to media/{public_id}/{role}-{16 hex}.{ext} and returns its media_assets row.
-     * The random part keeps asset URLs unguessable; the prefix keeps prefix deletes working.
+     * Uploads a draft to {public|private}/media/{public_id}/{role}-{16 hex}.{ext} (see MediaPaths)
+     * and returns its media_assets row. The random part keeps asset URLs unguessable; the prefix
+     * keeps prefix deletes working.
      */
-    private function store(ObjectStorage $storage, Submission $submission, AssetDraft $draft): array
+    private function store(ObjectStorage $storage, string $prefix, AssetDraft $draft): array
     {
         $hash = bin2hex(random_bytes(8));
-        $path = "media/{$submission->public_id}/{$draft->role->value}-{$hash}.".FileSignature::extension($draft->mime);
+        $path = $prefix."{$draft->role->value}-{$hash}.".FileSignature::extension($draft->mime);
         $storage->putFile($path, $draft->localPath, $draft->mime);
 
         return [

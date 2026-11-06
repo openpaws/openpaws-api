@@ -74,8 +74,8 @@ function storedObject(string $path): string
     return storage_path('framework/testing/objects/'.$path);
 }
 
-/** Regex for a stored asset path: media/{public_id}/{role}-{16 hex}.{ext}. */
-function mediaPathPattern(string $publicId, string $role, string $ext): string
+/** Regex for a stored asset path: {public|private}/media/{public_id}/{role}-{16 hex}.{ext}. */
+function mediaPathPattern(string $publicId, string $role, string $ext, string $scope = 'public'): string
 {
-    return '#^media/'.preg_quote($publicId, '#').'/'.preg_quote($role, '#').'-[0-9a-f]{16}\.'.preg_quote($ext, '#').'$#';
+    return '#^'.$scope.'/media/'.preg_quote($publicId, '#').'/'.preg_quote($role, '#').'-[0-9a-f]{16}\.'.preg_quote($ext, '#').'$#';
 }

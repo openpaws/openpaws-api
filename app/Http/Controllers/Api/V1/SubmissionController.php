@@ -11,7 +11,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSubmissionRequest;
 use App\Http\Requests\UpdateSubmissionRequest;
 use App\Http\Resources\SubmissionResource;
+use App\Jobs\MoveSubmissionMedia;
 use App\Jobs\ProcessSubmission;
+use App\Media\MediaPaths;
 use App\Models\Submission;
 use App\Models\Tag;
 use App\Models\UploadSession;
@@ -68,14 +70,14 @@ class SubmissionController extends Controller
             return $submission;
         });
 
-        return (new SubmissionResource($submission->load(['user', 'tags'])))->response()->setStatusCode(201);
+        return (new SubmissionResource($submission->load(['user', 'tags', 'assets'])))->response()->setStatusCode(201);
     }
 
     public function show(Request $request, Submission $submission)
     {
         ViewCounter::record($submission, $request->user('sanctum'), (string) $request->ip(), (string) $request->userAgent());
 
-        return (new SubmissionResource($submission->load(['user', 'tags'])))->withBody();
+        return (new SubmissionResource($submission->load(['user', 'tags', 'assets'])))->withBody();
     }
 
     public function update(UpdateSubmissionRequest $request, Submission $submission)
@@ -86,7 +88,13 @@ class SubmissionController extends Controller
 
         $affected = DB::transaction(function () use ($submission, $data, $tags) {
             $affected = $submission->tags()->pluck('tags.id')->all();
+            $wasPrivate = MediaPaths::isPrivate($submission->rating);
             $submission->fill($data)->save();
+            if (MediaPaths::isPrivate($submission->rating) !== $wasPrivate) {
+                // Crossed the adult boundary: move the files between public/ and private/.
+                // MediaUrls already signs/unsigns by the new rating, so this can lag safely.
+                MoveSubmissionMedia::dispatch($submission)->afterCommit();
+            }
             if ($tags !== null) {
                 $affected = array_merge($affected, $submission->tags()->sync($this->resolveTagIds($tags))['attached']);
             }
@@ -95,7 +103,7 @@ class SubmissionController extends Controller
         });
         Tag::recount($affected);
 
-        return new SubmissionResource($submission->load(['user', 'tags']));
+        return new SubmissionResource($submission->load(['user', 'tags', 'assets']));
     }
 
     public function destroy(Submission $submission)
@@ -136,7 +144,9 @@ class SubmissionController extends Controller
                 : null;
 
             if ($locked->assets()->delete() > 0) {
-                $storage->deletePrefix("media/{$locked->public_id}/");
+                foreach (MediaPaths::allPrefixes($locked) as $prefix) {
+                    $storage->deletePrefix($prefix);
+                }
             }
             $locked->forceFill(['status' => SubmissionStatus::Processing, 'published_at' => null])->save();
 
@@ -146,7 +156,7 @@ class SubmissionController extends Controller
             ProcessSubmission::dispatch($locked, $main?->id, $cover?->id)->afterCommit();
         });
 
-        return new SubmissionResource($submission->refresh()->load(['user', 'tags']));
+        return new SubmissionResource($submission->refresh()->load(['user', 'tags', 'assets']));
     }
 
     /**

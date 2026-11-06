@@ -29,6 +29,9 @@ interface ObjectStorage
 
     public function deletePrefix(string $prefix): void;
 
+    /** Moves an object to a new key within the bucket (copy, then delete the source). */
+    public function move(string $from, string $to): void;
+
     public function publicUrl(string $path): string;
 
     public function temporaryUrl(string $path, int $ttl): string;

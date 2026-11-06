@@ -34,7 +34,7 @@ class ProfileResource extends JsonResource
         $found = Submission::listedFor($request->user('sanctum'))
             ->where('user_id', $this->user_id)
             ->whereIn('public_id', $ids)
-            ->with('user')
+            ->with(['user', 'tags', 'assets'])
             ->get()
             ->keyBy('public_id');
 

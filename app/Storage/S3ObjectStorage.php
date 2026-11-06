@@ -106,6 +106,13 @@ class S3ObjectStorage implements ObjectStorage
         $this->client()->deleteMatchingObjects($this->bucket(), $prefix);
     }
 
+    public function move(string $from, string $to): void
+    {
+        // S3Client::copy uses a multipart copy for objects over the 5 GB CopyObject limit.
+        $this->client()->copy($this->bucket(), $from, $this->bucket(), $to);
+        $this->delete($from);
+    }
+
     public function publicUrl(string $path): string
     {
         return rtrim((string) config('openpaws.cdn_url'), '/').'/'.$path;
