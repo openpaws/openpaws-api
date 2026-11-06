@@ -47,5 +47,21 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('register', fn (Request $request) => Limit::perHour(3)->by($request->ip()));
         RateLimiter::for('search', fn (Request $request) => Limit::perMinute(60)->by($request->ip()));
         RateLimiter::for('uploads', fn (Request $request) => Limit::perHour(30)->by($request->user()?->id ?: $request->ip()));
+
+        // Endpoints that send mail (R33), so nobody can use the platform to spam an address.
+        RateLimiter::for('email-resend', fn (Request $request) => Limit::perMinutes(10, 3)
+            ->by($request->user()?->id ?: $request->ip()));
+        RateLimiter::for('password-forgot', fn (Request $request) => [
+            Limit::perHour(5)->by('ip:'.$request->ip()),
+            Limit::perHour(3)->by('email:'.strtolower(trim((string) $request->input('email')))),
+        ]);
+        RateLimiter::for('password-reset', fn (Request $request) => Limit::perHour(10)->by($request->ip()));
+        // PATCH /me sends a verification mail to the new address, so only email changes count.
+        RateLimiter::for('email-change', function (Request $request) {
+            $user = $request->user();
+            $changesEmail = $user !== null && $request->has('email') && (string) $request->input('email') !== $user->email;
+
+            return $changesEmail ? Limit::perHour(5)->by($user->id) : Limit::none();
+        });
     }
 }

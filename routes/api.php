@@ -21,14 +21,14 @@ Route::prefix('auth')->group(function () {
     Route::post('login', LoginController::class)->middleware('throttle:login');
     Route::post('logout', LogoutController::class)->middleware('auth:sanctum');
     Route::post('email/verify', [EmailVerificationController::class, 'verify']);
-    Route::post('email/resend', [EmailVerificationController::class, 'resend'])->middleware('auth:sanctum');
-    Route::post('password/forgot', [PasswordController::class, 'forgot']);
-    Route::post('password/reset', [PasswordController::class, 'reset']);
+    Route::post('email/resend', [EmailVerificationController::class, 'resend'])->middleware(['auth:sanctum', 'throttle:email-resend']);
+    Route::post('password/forgot', [PasswordController::class, 'forgot'])->middleware('throttle:password-forgot');
+    Route::post('password/reset', [PasswordController::class, 'reset'])->middleware('throttle:password-reset');
 });
 
 Route::middleware('auth:sanctum')->prefix('me')->group(function () {
     Route::get('/', [MeController::class, 'show']);
-    Route::patch('/', [MeController::class, 'update']);
+    Route::patch('/', [MeController::class, 'update'])->middleware('throttle:email-change');
     Route::patch('password', [MeController::class, 'password']);
     Route::patch('settings', [MeController::class, 'settings']);
     Route::post('adult-confirmation', [MeController::class, 'adultConfirmation']);
