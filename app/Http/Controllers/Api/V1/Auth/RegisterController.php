@@ -22,6 +22,8 @@ class RegisterController extends Controller
             'password' => $data['password'],
         ]);
 
+        $user->profile()->create();
+
         $user = $user->fresh();
         event(new Registered($user)); // sends the verification email
 

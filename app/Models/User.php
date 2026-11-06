@@ -45,6 +45,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->max_rating ?? Rating::General;
     }
 
+    public function profile(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Profile::class);
+    }
+
     public function sendEmailVerificationNotification(): void
     {
         $this->notify(new VerifyEmail);

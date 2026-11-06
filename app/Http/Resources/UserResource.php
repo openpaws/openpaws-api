@@ -24,8 +24,8 @@ class UserResource extends JsonResource
                 'email' => $this->email,
                 'email_verified' => $this->email_verified_at !== null,
                 'adult_confirmed' => $this->adult_confirmed_at !== null,
-                'max_rating' => $this->max_rating->value,
-                'role' => $this->role->value,
+                'max_rating' => ($this->max_rating ?? \App\Enums\Rating::General)->value,
+                'role' => ($this->role ?? \App\Enums\UserRole::User)->value,
             ];
         }
 
