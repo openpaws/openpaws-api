@@ -235,3 +235,40 @@ it('tag id resolution returns ids in the input order regardless of lock order', 
         ->and($ba)->toBe([$ids['fox'], $ids['wolf']])
         ->and(Tag::count())->toBe(2);
 });
+
+it('recount reads with a plain grouped select and updates tags one by one in ascending id order', function () {
+    $o = User::factory()->create();
+    $b = Tag::create(['slug' => 'b']);
+    $a = Tag::create(['slug' => 'a']);
+    $s = Submission::factory()->for($o)->create();
+    $s->tags()->sync([$a->id, $b->id]);
+
+    DB::enableQueryLog();
+    Tag::recount([$a->id, $b->id, $b->id]);
+    $log = collect(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    $selects = $log->filter(fn ($q) => str_starts_with(strtolower($q['query']), 'select'));
+    $updates = $log->filter(fn ($q) => str_starts_with(strtolower($q['query']), 'update'))->values();
+    expect($selects)->toHaveCount(1)
+        ->and(strtolower($selects->first()['query']))->toContain('group by')->not->toContain('for update')->not->toContain('lock in share mode')
+        ->and($updates)->toHaveCount(2)
+        ->and($updates->every(fn ($q) => ! str_contains(strtolower($q['query']), 'select')))->toBeTrue()
+        // ascending id order: $b was created first, so it has the lower id
+        ->and($updates->map(fn ($q) => end($q['bindings']))->all())->toBe([$b->id, $a->id])
+        ->and(Tag::find($a->id)->usage_count)->toBe(1)
+        ->and(Tag::find($b->id)->usage_count)->toBe(1);
+});
+
+it('recount inside a transaction runs only after the commit', function () {
+    $o = User::factory()->create();
+    $tag = Tag::create(['slug' => 'fox']);
+    $s = Submission::factory()->for($o)->create();
+    $s->tags()->sync([$tag->id]);
+
+    DB::transaction(function () use ($tag) {
+        Tag::recount([$tag->id]);
+        expect($tag->fresh()->usage_count)->toBe(0);
+    });
+    expect($tag->fresh()->usage_count)->toBe(1);
+});

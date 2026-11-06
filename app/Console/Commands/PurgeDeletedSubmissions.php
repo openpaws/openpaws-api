@@ -29,7 +29,8 @@ class PurgeDeletedSubmissions extends Command
             ->chunkById(100, function ($submissions) use ($storage, &$purged, &$failed, &$storageFailures) {
                 foreach ($submissions as $submission) {
                     try {
-                        if (! $this->purge($submission)) {
+                        $tagIds = $this->purge($submission);
+                        if ($tagIds === null) {
                             continue;
                         }
                         $purged++;
@@ -40,7 +41,12 @@ class PurgeDeletedSubmissions extends Command
                         continue;
                     }
 
-                    // After the commit: search entry, then stored media.
+                    // After the commit: tag counts, search entry, then stored media.
+                    try {
+                        Tag::recount($tagIds);
+                    } catch (Throwable $e) {
+                        Log::warning('Could not recount tags after purge', ['public_id' => $submission->public_id, 'error' => $e->getMessage()]);
+                    }
                     try {
                         $submission->unsearchable();
                     } catch (Throwable $e) {
@@ -65,13 +71,18 @@ class PurgeDeletedSubmissions extends Command
         return self::SUCCESS;
     }
 
-    /** Returns false when the submission was restored or already purged meanwhile. */
-    private function purge(Submission $stale): bool
+    /**
+     * Returns the purged submission's tag ids (to recount after the commit), or null when the
+     * submission was restored or already purged meanwhile.
+     *
+     * @return list<int>|null
+     */
+    private function purge(Submission $stale): ?array
     {
         return DB::transaction(function () use ($stale) {
             $submission = Submission::onlyTrashed()->whereKey($stale->id)->lockForUpdate()->first();
             if ($submission === null) {
-                return false;
+                return null;
             }
 
             $tagIds = DB::table('submission_tag')->where('submission_id', $submission->id)->pluck('tag_id')->all();
@@ -90,9 +101,8 @@ class PurgeDeletedSubmissions extends Command
                 });
 
             $submission->forceDelete();
-            Tag::recount($tagIds);
 
-            return true;
+            return array_map('intval', $tagIds);
         });
     }
 }
