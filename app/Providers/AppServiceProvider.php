@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Storage\ObjectStorage;
+use App\Storage\S3ObjectStorage;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -15,7 +17,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(ObjectStorage::class, S3ObjectStorage::class);
     }
 
     /**
@@ -29,5 +31,6 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(5)
             ->by($request->ip().'|'.strtolower((string) $request->input('login'))));
         RateLimiter::for('register', fn (Request $request) => Limit::perHour(3)->by($request->ip()));
+        RateLimiter::for('uploads', fn (Request $request) => Limit::perHour(30)->by($request->user()?->id ?: $request->ip()));
     }
 }
