@@ -88,18 +88,19 @@ it('does not expire a session consumed concurrently', function () {
         ->and($this->storage->exists($s->path))->toBeTrue();
 });
 
-it('deletes leftover staging of old consumed sessions without changing status', function () {
-    $old = cleanupSession(['status' => UploadStatus::Consumed, 'expires_at' => now()->subDays(2)]);
-    DB::table('upload_sessions')->where('id', $old->id)->update(['updated_at' => now()->subDays(2)]);
-    $recent = cleanupSession(['status' => UploadStatus::Consumed, 'expires_at' => now()->addHours(20)]);
+it('deletes leftover staging of consumed sessions only after the sweep threshold', function () {
+    $old = cleanupSession(['status' => UploadStatus::Consumed]);
+    $mid = cleanupSession(['status' => UploadStatus::Consumed]);
+    DB::table('upload_sessions')->where('id', $old->id)->update(['updated_at' => now()->subHours(73)]);
+    DB::table('upload_sessions')->where('id', $mid->id)->update(['updated_at' => now()->subHours(48)]);
     putObject($this, $old->path);
-    putObject($this, $recent->path);
+    putObject($this, $mid->path);
 
     $this->artisan('uploads:expire')->assertSuccessful();
 
     expect($this->storage->exists($old->path))->toBeFalse()
         ->and($old->fresh()->status)->toBe(UploadStatus::Consumed)
-        ->and($this->storage->exists($recent->path))->toBeTrue();
+        ->and($this->storage->exists($mid->path))->toBeTrue();
 });
 
 it('keeps going when a storage delete fails during expiry', function () {

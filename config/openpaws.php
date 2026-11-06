@@ -30,6 +30,7 @@ return [
 
     'uploads' => [
         'stale_hours' => (int) env('OPENPAWS_UPLOADS_STALE_HOURS', 24),
+        'consumed_sweep_hours' => (int) env('OPENPAWS_CONSUMED_SWEEP_HOURS', 72),
     ],
 
     'purge_days' => (int) env('OPENPAWS_PURGE_DAYS', 30),

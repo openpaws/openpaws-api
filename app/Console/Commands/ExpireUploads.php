@@ -17,7 +17,7 @@ use Throwable;
 class ExpireUploads extends Command
 {
     /** Consumed sessions are only swept for leftover staging objects for this many days. */
-    private const CONSUMED_SWEEP_DAYS = 7;
+    private const CONSUMED_SWEEP_DAYS = 14;
 
     public function handle(ObjectStorage $storage): int
     {
@@ -43,7 +43,7 @@ class ExpireUploads extends Command
         // Staging objects of consumed sessions that a failed post-publish delete left behind.
         UploadSession::query()
             ->where('status', UploadStatus::Consumed->value)
-            ->where('updated_at', '<', now()->subHours((int) config('openpaws.uploads.stale_hours')))
+            ->where('updated_at', '<', now()->subHours((int) config('openpaws.uploads.consumed_sweep_hours')))
             ->where('updated_at', '>', now()->subDays(self::CONSUMED_SWEEP_DAYS))
             ->chunkById(100, function ($sessions) use ($storage, &$swept, &$failures) {
                 foreach ($sessions as $session) {
