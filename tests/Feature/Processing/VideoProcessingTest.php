@@ -17,7 +17,7 @@ it('video: produces mp4 transcode ≤1080p and poster cover plus thumbnails', fu
     $id = $s->public_id;
 
     $t = $s->asset(AssetRole::Transcode);
-    expect($t->path)->toBe("media/{$id}/transcode.mp4")->and($t->mime)->toBe('video/mp4')
+    expect($t->path)->toMatch(mediaPathPattern($id, 'transcode', 'mp4'))->and($t->mime)->toBe('video/mp4')
         ->and($t->height)->toBeLessThanOrEqual(1080)->and($t->width)->toBeLessThanOrEqual(1920)
         ->and([$t->width, $t->height])->toBe([320, 240])
         ->and($t->duration_ms)->toBeGreaterThan(1500);
@@ -25,10 +25,10 @@ it('video: produces mp4 transcode ≤1080p and poster cover plus thumbnails', fu
     expect($probe['has_video'])->toBeTrue()->and($probe['has_audio'])->toBeTrue();
 
     $cover = $s->asset(AssetRole::Cover);
-    expect($cover->path)->toBe("media/{$id}/cover.webp")->and([$cover->width, $cover->height])->toBe([320, 240]);
+    expect($cover->path)->toMatch(mediaPathPattern($id, 'cover', 'webp'))->and([$cover->width, $cover->height])->toBe([320, 240]);
     expect($s->asset(AssetRole::ThumbSm)->width)->toBe(200)
         ->and($s->asset(AssetRole::ThumbLg)->width)->toBe(320);
-    expect($s->asset(AssetRole::Original)->path)->toBe("media/{$id}/original.mp4");
+    expect($s->asset(AssetRole::Original)->path)->toMatch(mediaPathPattern($id, 'original', 'mp4'));
 });
 
 it('video: an uploaded cover replaces the poster frame', function () {

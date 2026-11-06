@@ -146,10 +146,14 @@ class ProcessSubmission implements ShouldQueue
         return $target;
     }
 
-    /** Uploads a draft to media/{public_id}/{role}.{ext} and returns its media_assets row. */
+    /**
+     * Uploads a draft to media/{public_id}/{role}-{16 hex}.{ext} and returns its media_assets row.
+     * The random part keeps asset URLs unguessable; the prefix keeps prefix deletes working.
+     */
     private function store(ObjectStorage $storage, Submission $submission, AssetDraft $draft): array
     {
-        $path = "media/{$submission->public_id}/{$draft->role->value}.".FileSignature::extension($draft->mime);
+        $hash = bin2hex(random_bytes(8));
+        $path = "media/{$submission->public_id}/{$draft->role->value}-{$hash}.".FileSignature::extension($draft->mime);
         $storage->putFile($path, $draft->localPath, $draft->mime);
 
         return [

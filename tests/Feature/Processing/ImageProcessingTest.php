@@ -22,7 +22,7 @@ it('image: produces thumb_sm/md/lg and preview as webp with longest edges 200/40
         expect($a)->not->toBeNull()
             ->and($a->mime)->toBe('image/webp')
             ->and($a->disk)->toBe('s3')
-            ->and($a->path)->toBe("media/{$id}/{$role->value}.webp")
+            ->and($a->path)->toMatch(mediaPathPattern($id, $role->value, 'webp'))
             ->and(max($a->width, $a->height))->toBe($edge)
             ->and($a->checksum_sha256)->toBe(hash_file('sha256', storedObject($a->path)))
             ->and($a->size_bytes)->toBe(filesize(storedObject($a->path)));
@@ -32,7 +32,7 @@ it('image: produces thumb_sm/md/lg and preview as webp with longest edges 200/40
     }
 
     $orig = $s->asset(AssetRole::Original);
-    expect($orig->path)->toBe("media/{$id}/original.png")
+    expect($orig->path)->toMatch(mediaPathPattern($id, 'original', 'png'))
         ->and($orig->mime)->toBe('image/png')
         ->and([$orig->width, $orig->height])->toBe([2400, 1800])
         ->and($this->storage->exists($orig->path))->toBeTrue();
@@ -57,7 +57,7 @@ it('image: stored original and preview have no EXIF GPS', function () {
     expect(runProcessing($s, stagedSession($u, 'image', 'gps.jpg')))->toBeNull();
 
     $orig = $s->asset(AssetRole::Original);
-    expect($orig->path)->toBe("media/{$s->public_id}/original.jpg")->and($orig->mime)->toBe('image/jpeg');
+    expect($orig->path)->toMatch(mediaPathPattern($s->public_id, 'original', 'jpg'))->and($orig->mime)->toBe('image/jpeg');
     foreach ([AssetRole::Original, AssetRole::Preview, AssetRole::ThumbLg] as $role) {
         $im = new Imagick(storedObject($s->asset($role)->path));
         expect($im->getImageProperties('exif:GPS*'))->toBeEmpty();
@@ -90,4 +90,21 @@ it('image: rejects images larger than 16384px on a side as a processing failure'
 
     expect(runProcessing($s, $session))->toBeInstanceOf(MediaProcessingFailed::class);
     expect($s->fresh()->status)->toBe(SubmissionStatus::Failed)->and($s->assets()->count())->toBe(0);
+});
+
+it('image: stored paths carry a random hash that differs between processing runs', function () {
+    $u = User::factory()->create();
+    $paths = [];
+    foreach ([1, 2] as $run) {
+        $s = processingSubmission($u, 'image');
+        expect(runProcessing($s, stagedSession($u, 'image', 'image.jpg')))->toBeNull();
+        $orig = $s->asset(AssetRole::Original)->path;
+        $md = $s->asset(AssetRole::ThumbMd)->path;
+        expect($orig)->toMatch(mediaPathPattern($s->public_id, 'original', 'jpg'))
+            ->and($md)->toMatch(mediaPathPattern($s->public_id, 'thumb_md', 'webp'))
+            ->and($this->storage->exists($orig))->toBeTrue();
+        $paths[] = [basename($orig), basename($md)];
+    }
+
+    expect($paths[0][0])->not->toBe($paths[1][0])->and($paths[0][1])->not->toBe($paths[1][1]);
 });

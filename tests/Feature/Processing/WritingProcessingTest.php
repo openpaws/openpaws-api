@@ -29,7 +29,7 @@ it('writing: publishes with document asset when provided', function () {
     $s->refresh();
     expect($s->status)->toBe(SubmissionStatus::Published)->and($s->published_at)->not->toBeNull();
     $doc = $s->asset(AssetRole::Document);
-    expect($doc->path)->toBe("media/{$s->public_id}/document.docx")
+    expect($doc->path)->toMatch(mediaPathPattern($s->public_id, 'document', 'docx'))
         ->and($doc->mime)->toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         ->and($this->storage->exists($doc->path))->toBeTrue();
     expect($s->asset(AssetRole::Original))->toBeNull()
