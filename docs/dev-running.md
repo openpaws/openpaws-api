@@ -24,6 +24,21 @@ PHP server, so per-run overrides such as `OPENPAWS_SIGNED_MEDIA_TTL=5 php artisa
 are ignored. Put them in `.env`, or run the server directly:
 `cd public && OPENPAWS_SIGNED_MEDIA_TTL=5 php -S 127.0.0.1:8000 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php`.
 
+## Client IPs behind the UI server (trusted proxies)
+
+The UI renders pages server-side (SSR), so many API calls come from the UI server's address,
+not the browser's. The UI forwards the browser's IP in `X-Forwarded-For`, and the API believes
+that header only from the addresses listed in `TRUSTED_PROXIES` (comma-separated IPs/CIDRs,
+default `127.0.0.1`; see `config/trustedproxy.php`). That keeps per-IP rate limits (search,
+login, register, password reset) per browser rather than one shared budget for the whole site.
+
+**Production: list only the UI server's address(es)** (plus a load balancer directly in front
+of the API, if there is one). Never a public range and never `*`: anyone connecting from a
+trusted address can claim any client IP and so evade or redirect per-IP limits. In dev the
+browser, the UI and the API all share `127.0.0.1`, so a direct call to the API can set its own
+`X-Forwarded-For`; that is accepted for local development only. Run `php artisan config:clear`
+(or `config:cache`) after changing the value.
+
 ## Search index
 
 ```bash

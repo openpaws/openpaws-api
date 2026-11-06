@@ -27,6 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Global (not only the api group) so that 404s for unmatched routes also carry the id.
         $middleware->prepend(RequestId::class);
         $middleware->statefulApi();
+        // Trusted proxies (U10) come from TRUSTED_PROXIES via config/trustedproxy.php, which the
+        // global TrustProxies middleware reads; see docs/dev-running.md before changing it.
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
