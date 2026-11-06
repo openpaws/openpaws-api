@@ -40,7 +40,7 @@ class SubmissionResource extends JsonResource
             'rating' => $this->rating->value,
             'status' => $this->status->value,
             'visibility' => $this->visibility->value,
-            'tags' => [], // Task 8
+            'tags' => $this->tags->pluck('slug')->values()->all(),
             'views_count' => (int) $this->views_count,
             'published_at' => $this->published_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),

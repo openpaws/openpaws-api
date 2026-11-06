@@ -13,6 +13,7 @@ use App\Http\Requests\UpdateSubmissionRequest;
 use App\Http\Resources\SubmissionResource;
 use App\Jobs\ProcessSubmission;
 use App\Models\Submission;
+use App\Models\Tag;
 use App\Models\UploadSession;
 use App\Models\User;
 use App\Storage\ObjectStorage;
@@ -34,9 +35,10 @@ class SubmissionController extends Controller
         $user = $request->user();
         $data = $request->validated();
         $type = SubmissionType::from($data['type']);
-        // Tags and folder are validated by the request; they are persisted from Tasks 8 and 10.
+        $tags = $request->normalizedTags() ?? [];
+        // Folder is validated by the request; it is persisted from Task 10.
 
-        $submission = DB::transaction(function () use ($user, $data, $type) {
+        $submission = DB::transaction(function () use ($user, $data, $type, $tags) {
             $main = isset($data['upload_session_id'])
                 ? $this->lockSession($user, 'upload_session_id', $data['upload_session_id'], $type->uploadKind())
                 : null;
@@ -56,6 +58,7 @@ class SubmissionController extends Controller
                 'published_at' => null,
             ]);
             $submission->save();
+            $submission->tags()->sync($this->resolveTagIds($tags));
 
             $main?->consume();
             $cover?->consume();
@@ -65,29 +68,42 @@ class SubmissionController extends Controller
             return $submission;
         });
 
-        return (new SubmissionResource($submission->load('user')))->response()->setStatusCode(201);
+        return (new SubmissionResource($submission->load(['user', 'tags'])))->response()->setStatusCode(201);
     }
 
     public function show(Request $request, Submission $submission)
     {
         ViewCounter::record($submission, $request->user('sanctum'), (string) $request->ip(), (string) $request->userAgent());
 
-        return (new SubmissionResource($submission->load('user')))->withBody();
+        return (new SubmissionResource($submission->load(['user', 'tags'])))->withBody();
     }
 
     public function update(UpdateSubmissionRequest $request, Submission $submission)
     {
         $data = $request->validated();
-        unset($data['tags'], $data['folder']); // validated only until Tasks 8 and 10
-        $submission->fill($data)->save();
+        unset($data['tags'], $data['folder']); // folder is validated only until Task 10
+        $tags = $request->normalizedTags();
 
-        return new SubmissionResource($submission->load('user'));
+        $affected = DB::transaction(function () use ($submission, $data, $tags) {
+            $affected = $submission->tags()->pluck('tags.id')->all();
+            $submission->fill($data)->save();
+            if ($tags !== null) {
+                $affected = array_merge($affected, $submission->tags()->sync($this->resolveTagIds($tags))['attached']);
+            }
+
+            return $affected;
+        });
+        Tag::recount($affected);
+
+        return new SubmissionResource($submission->load(['user', 'tags']));
     }
 
     public function destroy(Submission $submission)
     {
         Gate::authorize('delete', $submission);
+        $tagIds = $submission->tags()->pluck('tags.id')->all();
         $submission->delete();
+        Tag::recount($tagIds);
 
         return response()->noContent();
     }
@@ -130,7 +146,18 @@ class SubmissionController extends Controller
             ProcessSubmission::dispatch($locked, $main?->id, $cover?->id)->afterCommit();
         });
 
-        return new SubmissionResource($submission->refresh()->load('user'));
+        return new SubmissionResource($submission->refresh()->load(['user', 'tags']));
+    }
+
+    /**
+     * Finds or creates the tags for already-normalised slugs.
+     *
+     * @param  list<string>  $slugs
+     * @return list<int>
+     */
+    private function resolveTagIds(array $slugs): array
+    {
+        return array_map(fn (string $slug) => Tag::firstOrCreate(['slug' => $slug])->id, $slugs);
     }
 
     private function ensureFailed(Submission $submission): void

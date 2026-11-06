@@ -16,7 +16,7 @@ it('owner can PATCH title, description, rating and visibility', function () {
         ->assertJsonPath('data.description_html', '<p><em>d</em></p>')
         ->assertJsonPath('data.rating', 'adult')
         ->assertJsonPath('data.visibility', 'unlisted')
-        ->assertJsonPath('data.tags', []);
+        ->assertJsonPath('data.tags', ['a', 'b']);
 
     $s->refresh();
     expect($s->title)->toBe('New')->and($s->rating)->toBe(Rating::Adult);

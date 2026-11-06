@@ -13,6 +13,7 @@ use App\Media\Processors\MediaProcessor;
 use App\Media\Processors\VideoProcessor;
 use App\Media\Processors\WritingProcessor;
 use App\Models\Submission;
+use App\Models\Tag;
 use App\Models\UploadSession;
 use App\Storage\ObjectStorage;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -74,6 +75,7 @@ class ProcessSubmission implements ShouldQueue
                 $submission->assets()->createMany($rows);
                 $submission->forceFill(['status' => SubmissionStatus::Published, 'published_at' => now()])->save();
             });
+            Tag::recount($submission->tags()->pluck('tags.id')->all());
         } catch (MediaProcessingFailed $e) {
             if ($e->permanent && $this->job !== null) {
                 $this->fail($e); // not worth retrying; the worker calls failed()

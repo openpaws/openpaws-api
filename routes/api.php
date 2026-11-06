@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\SubmissionController;
+use App\Http\Controllers\Api\V1\TagController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
@@ -46,3 +47,6 @@ Route::middleware('auth:sanctum')->prefix('submissions')->group(function () {
     Route::delete('{submission}', [SubmissionController::class, 'destroy']);
     Route::post('{submission}/retry', [SubmissionController::class, 'retry']);
 });
+
+Route::get('tags/autocomplete', [TagController::class, 'autocomplete']);
+Route::get('tags/{slug}', [TagController::class, 'show']);

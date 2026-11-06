@@ -5,11 +5,14 @@ namespace App\Http\Requests;
 use App\Enums\Rating;
 use App\Enums\SubmissionType;
 use App\Enums\Visibility;
+use App\Http\Requests\Concerns\ValidatesTags;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreSubmissionRequest extends FormRequest
 {
+    use ValidatesTags;
+
     public function authorize(): bool
     {
         return $this->user()?->hasVerifiedEmail() === true;
@@ -31,7 +34,7 @@ class StoreSubmissionRequest extends FormRequest
                 : ['prohibited'],
             'rating' => ['required', Rule::enum(Rating::class)],
             'visibility' => ['required', Rule::enum(Visibility::class)],
-            // Tags and folders are validated now but persisted from Tasks 8 and 10.
+            // Folders are validated now but persisted from Task 10.
             'tags' => ['sometimes', 'array', 'max:200'],
             'tags.*' => ['string', 'max:100'],
             'folder' => ['sometimes', 'string', 'max:100'],
