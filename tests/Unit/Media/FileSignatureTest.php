@@ -89,3 +89,54 @@ it('sniffs a very large file without loading it into memory', function () {
         @rmdir($dir);
     }
 });
+
+function mp3WithId3(int $tagBytes, ?int $declared = null): string
+{
+    $declared ??= $tagBytes;
+    $size = '';
+    for ($shift = 21; $shift >= 0; $shift -= 7) {
+        $size .= chr(($declared >> $shift) & 0x7F);
+    }
+    $path = sys_get_temp_dir().'/opaws-id3-'.uniqid().'.mp3';
+    $out = fopen($path, 'wb');
+    fwrite($out, 'ID3'."\x03\x00\x00".$size);
+    $chunk = str_repeat("\0", 1024 * 1024);
+    for ($left = $tagBytes; $left > 0; $left -= strlen($chunk)) {
+        fwrite($out, substr($chunk, 0, min($left, strlen($chunk))));
+    }
+    fwrite($out, file_get_contents(mediaFixture('audio.mp3')));
+    fclose($out);
+
+    return $path;
+}
+
+it('detects an mp3 behind a tag larger than the sniff window', function () {
+    $path = mp3WithId3(2 * 1024 * 1024 + 123);
+    try {
+        expect(FileSignature::detect($path))->toBe('audio/mpeg');
+    } finally {
+        @unlink($path);
+    }
+});
+
+it('detects an mp3 behind a large id3 tag with bounded memory', function () {
+    $path = mp3WithId3(3 * 1024 * 1024);
+    try {
+        $code = 'require "'.base_path('vendor/autoload.php').'"; echo App\Media\FileSignature::detect($argv[1]);';
+        $process = new Symfony\Component\Process\Process([PHP_BINARY, '-d', 'memory_limit=16M', '-r', $code, '--', $path]);
+        $process->run();
+        expect($process->getExitCode())->toBe(0, $process->getErrorOutput())
+            ->and($process->getOutput())->toBe('audio/mpeg');
+    } finally {
+        @unlink($path);
+    }
+});
+
+it('falls back to the head result when the id3 length is bogus', function () {
+    $path = mp3WithId3(1000, 200 * 1024 * 1024);
+    try {
+        expect(FileSignature::detect($path))->toBeString()->not->toBe('audio/mpeg');
+    } finally {
+        @unlink($path);
+    }
+});

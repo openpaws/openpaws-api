@@ -53,12 +53,44 @@ final class FileSignature
         }
         try {
             $head = fread($handle, self::SNIFF_BYTES);
+            $finfo = new finfo(FILEINFO_MIME_TYPE);
+            $mime = is_string($head) && $head !== '' ? $finfo->buffer($head) : false;
+            $mime = is_string($mime) ? $mime : 'application/octet-stream';
+
+            // A large ID3v2 tag (cover art) pushes the first MPEG frame past the head: sniff after the tag.
+            if (is_string($head) && str_starts_with($head, 'ID3') && strlen($head) >= 10) {
+                $after = self::sniffAfterId3($handle, $head, $finfo);
+                if ($after === 'audio/mpeg') {
+                    return $after;
+                }
+            }
+
+            return $mime;
         } finally {
             fclose($handle);
         }
-        $mime = is_string($head) && $head !== '' ? (new finfo(FILEINFO_MIME_TYPE))->buffer($head) : false;
+    }
 
-        return is_string($mime) ? $mime : 'application/octet-stream';
+    /** @param resource $handle */
+    private static function sniffAfterId3($handle, string $head, finfo $finfo): ?string
+    {
+        $size = 0;
+        for ($i = 6; $i < 10; $i++) {
+            $size = ($size << 7) | (ord($head[$i]) & 0x7F);
+        }
+        $end = 10 + $size + ((ord($head[5]) & 0x10) ? 10 : 0);
+
+        $stat = fstat($handle);
+        if ($stat === false || $end >= $stat['size'] || fseek($handle, $end) !== 0) {
+            return null;
+        }
+        $buffer = fread($handle, self::SNIFF_BYTES);
+        if (! is_string($buffer) || $buffer === '') {
+            return null;
+        }
+        $mime = $finfo->buffer($buffer);
+
+        return is_string($mime) ? $mime : null;
     }
 
     public static function matches(string $localPath, UploadKind $kind): bool
