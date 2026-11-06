@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1\Auth;
 
-use App\Exceptions\DomainError;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRule;
+use Illuminate\Validation\ValidationException;
 
 class PasswordController extends Controller
 {
@@ -34,7 +34,7 @@ class PasswordController extends Controller
         });
 
         if ($status !== Password::PASSWORD_RESET) {
-            throw new DomainError('invalid_token', 'This reset link is invalid or has expired.');
+            throw ValidationException::withMessages(['token' => ['This link is invalid or has expired.']]);
         }
 
         return response()->json(['message' => 'Password has been reset.']);

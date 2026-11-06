@@ -34,17 +34,15 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * The user's chosen max rating, capped at Mature until adulthood is confirmed.
+     * Users without adult_confirmed_at get General; otherwise their chosen max_rating.
      */
     public function effectiveMaxRating(): Rating
     {
-        $max = $this->max_rating ?? Rating::General;
-
-        if ($max === Rating::Adult && $this->adult_confirmed_at === null) {
-            return Rating::Mature;
+        if ($this->adult_confirmed_at === null) {
+            return Rating::General;
         }
 
-        return $max;
+        return $this->max_rating ?? Rating::General;
     }
 
     public function sendEmailVerificationNotification(): void

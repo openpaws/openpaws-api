@@ -3,16 +3,18 @@
 use App\Exceptions\DomainError;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 beforeEach(function () {
     Route::prefix('api/v1')->group(function () {
-        Route::post('_test/validate', fn (Illuminate\Http\Request $r) => $r->validate(['title' => 'required']));
+        Route::post('_test/validate', fn (Request $r) => $r->validate(['title' => 'required']));
         Route::post('_test/domain', fn () => throw new DomainError('invalid_state', 'Nope.'));
         Route::get('_test/boom', fn () => throw new RuntimeException('secret detail'));
         Route::get('_test/unauth', fn () => throw new AuthenticationException);
         Route::get('_test/forbidden', fn () => throw new AuthorizationException);
-        Route::get('_test/throttle', fn () => throw new Illuminate\Http\Exceptions\ThrottleRequestsException);
+        Route::get('_test/throttle', fn () => throw new ThrottleRequestsException);
     });
 });
 

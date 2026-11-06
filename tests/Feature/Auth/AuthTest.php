@@ -103,13 +103,13 @@ it('verifies email with a valid token', function () {
 it('rejects an expired token', function () {
     [, $token] = verifyToken();
     $this->travel(25)->hours();
-    spa()->postJson('/api/v1/auth/email/verify', ['token' => $token])->assertStatus(422)->assertJsonPath('error.code', 'token_expired');
+    spa()->postJson('/api/v1/auth/email/verify', ['token' => $token])->assertStatus(422)->assertJsonPath('error.code', 'validation_failed')->assertJsonStructure(['error' => ['fields' => ['token']]]);
 });
 
 it('rejects a token for a changed email', function () {
     [$user, $token] = verifyToken();
     $user->update(['email' => 'new@example.com']);
-    spa()->postJson('/api/v1/auth/email/verify', ['token' => $token])->assertStatus(422)->assertJsonPath('error.code', 'invalid_token');
+    spa()->postJson('/api/v1/auth/email/verify', ['token' => $token])->assertStatus(422)->assertJsonPath('error.code', 'validation_failed')->assertJsonStructure(['error' => ['fields' => ['token']]]);
     expect($user->fresh()->email_verified_at)->toBeNull();
 });
 

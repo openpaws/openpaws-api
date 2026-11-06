@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1\Auth;
 
-use App\Exceptions\DomainError;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Validation\ValidationException;
 
 class EmailVerificationController extends Controller
 {
@@ -19,19 +19,19 @@ class EmailVerificationController extends Controller
         try {
             $payload = json_decode(Crypt::decryptString($data['token']), true, 8, JSON_THROW_ON_ERROR);
         } catch (DecryptException|\JsonException) {
-            throw new DomainError('invalid_token', 'This verification link is invalid.');
+            throw ValidationException::withMessages(['token' => ['This link is invalid or has expired.']]);
         }
 
         if (! is_array($payload) || ! isset($payload['uid'], $payload['email'], $payload['exp'])) {
-            throw new DomainError('invalid_token', 'This verification link is invalid.');
+            throw ValidationException::withMessages(['token' => ['This link is invalid or has expired.']]);
         }
         if ($payload['exp'] < now()->getTimestamp()) {
-            throw new DomainError('token_expired', 'This verification link has expired.');
+            throw ValidationException::withMessages(['token' => ['This link is invalid or has expired.']]);
         }
 
         $user = User::find($payload['uid']);
         if (! $user || $user->email !== $payload['email']) {
-            throw new DomainError('invalid_token', 'This verification link is invalid.');
+            throw ValidationException::withMessages(['token' => ['This link is invalid or has expired.']]);
         }
 
         if (! $user->hasVerifiedEmail()) {
