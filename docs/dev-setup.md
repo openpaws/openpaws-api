@@ -76,6 +76,46 @@ anonymous `curl` of a `public/` object is 200, of a `private/` or `staging/` obj
 of `http://127.0.0.1:9000/openpaws?list-type=2&prefix=public` 403; a presigned
 `temporaryUrl` for a `private/` object is 200.
 
+### CORS for browser uploads
+The UI uploads files straight to the bucket with presigned `PUT` URLs, and multipart uploads
+read each part's `ETag` response header (sent back in `POST /uploads/{id}/complete`). The rule:
+
+| Field | Value |
+|---|---|
+| AllowedOrigins | `http://localhost:3000` (the UI) |
+| AllowedMethods | `PUT` |
+| AllowedHeaders | `*` (the signed `Content-Type` of single PUTs) |
+| ExposeHeaders | `ETag` — without it the browser hides the header and the UI fails with "Upload blocked by storage CORS (ETag not exposed)." |
+
+On S3 (and providers with bucket-level CORS) apply it to the bucket:
+```bash
+mcli cors set local/openpaws - <<'XML'
+<CORSConfiguration>
+  <CORSRule>
+    <AllowedOrigin>http://localhost:3000</AllowedOrigin>
+    <AllowedMethod>PUT</AllowedMethod>
+    <AllowedHeader>*</AllowedHeader>
+    <ExposeHeader>ETag</ExposeHeader>
+    <MaxAgeSeconds>3600</MaxAgeSeconds>
+  </CORSRule>
+</CORSConfiguration>
+XML
+```
+**Our MinIO (RELEASE.2025-10-15) does not implement bucket CORS**: the command above fails with
+"A header you provided implies functionality that is not implemented." MinIO applies one
+server-wide CORS policy instead. It always allows `PUT`, echoes the requested headers and exposes
+`Etag` (among other S3 headers); only the allowed origin is configurable, and it defaults to `*`.
+Restrict it to the UI:
+```bash
+mcli admin config set local api cors_allow_origin=http://localhost:3000
+mcli admin config get local api | tr ' ' '\n' | grep cors   # cors_allow_origin=http://localhost:3000
+```
+Check with a presigned PUT URL (`app(App\Storage\ObjectStorage::class)->presignPut(...)` in
+`php artisan tinker`): a preflight `OPTIONS` with `Origin: http://localhost:3000` and
+`Access-Control-Request-Method: PUT` returns `Access-Control-Allow-Origin: http://localhost:3000`
+(another origin gets no such header); the `PUT` itself returns `ETag` and
+`Access-Control-Expose-Headers: …, Etag, …`. For more UI origins, comma-separate them.
+
 ## Queue worker
 Queues in priority order: `moves` (MoveSubmissionMedia: public/ ↔ private/ after an adult
 rating change; short, and must not wait behind transcodes), then `media`, `video`, `default`.
