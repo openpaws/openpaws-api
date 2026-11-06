@@ -61,7 +61,7 @@ it('retry: session rules match creation', function () {
     $retry(null)->assertStatus(422)->assertJsonPath('error.code', 'validation_failed');
 
     expect($s->fresh()->status)->toBe(SubmissionStatus::Failed);
-    Queue::assertNothingPushed();
+    assertNoAppJobsPushed();
 });
 
 it('retry: owner only (403 for visible non-owner, 404 when not visible)', function () {
@@ -79,7 +79,7 @@ it('retry: owner only (403 for visible non-owner, 404 when not visible)', functi
 
     app('auth')->forgetGuards();
     $this->postJson("/api/v1/submissions/{$failed->public_id}/retry", ['upload_session_id' => $session->id])->assertUnauthorized();
-    Queue::assertNothingPushed();
+    assertNoAppJobsPushed();
 });
 
 it('retry: writing retries take an optional document session and video uses the video queue', function () {

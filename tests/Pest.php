@@ -6,7 +6,10 @@ use App\Models\UploadSession;
 use App\Models\User;
 use App\Storage\ObjectStorage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Laravel\Scout\Jobs\MakeSearchable;
+use Laravel\Scout\Jobs\RemoveFromSearch;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class)->use(RefreshDatabase::class)->in('Feature', 'Unit');
@@ -78,4 +81,17 @@ function storedObject(string $path): string
 function mediaPathPattern(string $publicId, string $role, string $ext, string $scope = 'public'): string
 {
     return '#^'.$scope.'/media/'.preg_quote($publicId, '#').'/'.preg_quote($role, '#').'-[0-9a-f]{16}\.'.preg_quote($ext, '#').'$#';
+}
+
+/**
+ * Like Queue::assertNothingPushed(), but ignores Scout's own index-sync jobs: Scout is queued
+ * (R30), so creating a searchable model in a test pushes one of those.
+ */
+function assertNoAppJobsPushed(): void
+{
+    $pushed = array_values(array_diff(
+        array_keys(Queue::pushedJobs()),
+        [MakeSearchable::class, RemoveFromSearch::class],
+    ));
+    expect($pushed)->toBe([]);
 }

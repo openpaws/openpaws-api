@@ -53,7 +53,7 @@ it('rejects a pending (not completed) session with upload_not_complete and creat
     createSubmission($this, $u, ['upload_session_id' => $s->id])
         ->assertStatus(422)->assertJsonPath('error.code', 'upload_not_complete');
     expect(Submission::count())->toBe(0)->and($s->fresh()->status)->toBe(UploadStatus::Pending);
-    Queue::assertNothingPushed();
+    assertNoAppJobsPushed();
 });
 
 it('rejects reusing a consumed session with upload_already_used', function (string $status) {
@@ -64,7 +64,7 @@ it('rejects reusing a consumed session with upload_already_used', function (stri
     createSubmission($this, $u, ['upload_session_id' => $s->id])
         ->assertStatus(422)->assertJsonPath('error.code', 'upload_already_used');
     expect(Submission::count())->toBe(0);
-    Queue::assertNothingPushed();
+    assertNoAppJobsPushed();
 })->with(['consumed', 'expired']);
 
 it('rejects a second submission from the same session', function () {
@@ -177,7 +177,7 @@ it('rejects a cover session of the wrong kind or state and leaves the main sessi
         ->assertStatus(422)->assertJsonStructure(['error' => ['fields' => ['cover_upload_session_id']]]);
 
     expect(Submission::count())->toBe(0)->and($main->fresh()->status)->toBe(UploadStatus::Uploaded);
-    Queue::assertNothingPushed();
+    assertNoAppJobsPushed();
 });
 
 it('requires auth and a verified email', function () {

@@ -31,6 +31,12 @@ php artisan scout:sync-index-settings
 php artisan scout:import "App\Models\Submission"
 ```
 
+Index updates are queued (`SCOUT_QUEUE=true`, queue `default`) and dispatched only after the
+database commit, so the worker above must be running for new and edited submissions to show
+up in search. A Meilisearch outage never fails processing or a request: the failure is logged
+("Could not update the search index") and the queued job retries (5 tries, backing off up to 15 min); run `scout:import` again
+after a long outage to catch up.
+
 ## Talking to the API with curl (Sanctum SPA cookie session)
 
 The API authenticates the SPA with cookies, so requests must look like they come from the

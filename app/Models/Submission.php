@@ -8,6 +8,7 @@ use App\Enums\SubmissionStatus;
 use App\Enums\SubmissionType;
 use App\Enums\Visibility;
 use App\Models\Concerns\HasPublicId;
+use Closure;
 use Database\Factories\SubmissionFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -16,12 +17,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Log;
 use Laravel\Scout\Searchable;
+use Throwable;
 
 class Submission extends Model
 {
     /** @use HasFactory<SubmissionFactory> */
-    use HasFactory, HasPublicId, Searchable, SoftDeletes;
+    use HasFactory, HasPublicId, SoftDeletes;
+
+    use Searchable {
+        queueMakeSearchable as scoutQueueMakeSearchable;
+        queueRemoveFromSearch as scoutQueueRemoveFromSearch;
+    }
 
     protected $guarded = ['id', 'public_id', 'views_count'];
 
@@ -57,6 +65,34 @@ class Submission extends Model
             'published_at' => $this->published_at?->getTimestamp(),
             'views_count' => $this->views_count,
         ];
+    }
+
+    /**
+     * Search is not critical: a failure to index (or to queue the indexing) is logged and never
+     * fails the caller, so a Meilisearch outage cannot fail processing or 500 a committed write.
+     * The next save or `scout:import` brings the index back in line.
+     */
+    public function queueMakeSearchable($models)
+    {
+        $this->guardSearchSync('make searchable', $models, fn () => $this->scoutQueueMakeSearchable($models));
+    }
+
+    public function queueRemoveFromSearch($models)
+    {
+        $this->guardSearchSync('remove from search', $models, fn () => $this->scoutQueueRemoveFromSearch($models));
+    }
+
+    private function guardSearchSync(string $action, $models, Closure $sync): void
+    {
+        try {
+            $sync();
+        } catch (Throwable $e) {
+            Log::warning('Could not update the search index', [
+                'action' => $action,
+                'public_ids' => collect($models)->pluck('public_id')->all(),
+                'exception' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function shouldBeSearchable(): bool

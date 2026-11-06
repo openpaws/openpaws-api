@@ -44,7 +44,12 @@ return [
     |
     */
 
-    'queue' => env('SCOUT_QUEUE', false),
+    // OpenPaws: queued by default on `default`, so a search outage never fails a publish or a
+    // committed request; the queued sync job retries on its own (R30).
+    'queue' => env('SCOUT_QUEUE', true) ? [
+        'connection' => env('SCOUT_QUEUE_CONNECTION'),
+        'queue' => env('SCOUT_QUEUE_NAME', 'default'),
+    ] : false,
 
     /*
     |--------------------------------------------------------------------------
@@ -57,7 +62,13 @@ return [
     |
     */
 
-    'after_commit' => false,
+    'after_commit' => true,
+
+    // Retries for the queued sync jobs (read by Scout's ConfiguresJobOptions).
+    'jobs' => [
+        'tries' => 5,
+        'backoff' => [10, 60, 300, 900],
+    ],
 
     /*
     |--------------------------------------------------------------------------

@@ -264,7 +264,7 @@ it('mature or adult ratings require an 18+-confirmed uploader on create, update 
     $session = makeUploadSession($u, 'image');
     $this->postJson("/api/v1/submissions/{$failed->public_id}/retry", ['upload_session_id' => $session->id])
         ->assertStatus(422)->assertJsonPath('error.code', 'validation_failed')->assertJsonStructure(['error' => ['fields' => ['rating']]]);
-    Queue::assertNothingPushed();
+    assertNoAppJobsPushed();
 
     // Once confirmed, all three work.
     $u->forceFill(['adult_confirmed_at' => now()])->save();
